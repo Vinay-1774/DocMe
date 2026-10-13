@@ -72,37 +72,6 @@ researchPlatform/
    pip install -r requirements.txt
    ```
 
-4. **Configure environment variables:**
-   Create a `.env` file in the project root:
-   ```env
-   # Database Configuration
-   DB_HOST=localhost
-   DB_PORT=5432
-   DB_NAME=research_platform
-   DB_USER=postgres
-   DB_PASSWORD=your_postgres_password
-
-   # Authentication
-   JWT_SECRET_KEY=your_secure_random_secret_key
-   JWT_ALGORITHM=HS256
-   ACCESS_TOKEN_EXPIRE_MINUTES=60
-
-   # LLM and Embeddings
-   GEMINI_API_KEY=your_gemini_api_key
-   EMBEDDING_MODEL=models/gemini-embedding-001
-   CHAT_MODEL=models/gemini-2.0-flash
-
-   # Chunking & Retrieval
-   CHUNK_SIZE=1000
-   CHUNK_OVERLAP=150
-   RETRIEVAL_LIMIT=5
-
-   # Application & Storage
-   UPLOAD_DIR=backend/uploads
-   CORS_ORIGINS=http://localhost:3000,http://localhost:8000
-   ```
-
----
 
 ## Database Initialization
 
