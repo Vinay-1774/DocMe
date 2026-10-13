@@ -1,0 +1,41 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+  <meta charset="UTF-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1.0">
+  <meta http-equiv="refresh" content="0; url=pages/login.html">
+  <title>Research Platform</title>
+  <link rel="stylesheet" href="shared/components.css">
+  <style>
+    body {
+      display: flex;
+      align-items: center;
+      justify-content: center;
+      min-height: 100vh;
+      background: var(--bg-page);
+      font-family: var(--font-sans);
+    }
+    .loading-container {
+      text-align: center;
+    }
+  </style>
+</head>
+<body>
+  <div class="loading-container">
+    <div class="spinner spinner-dark" style="margin: 0 auto 1rem auto; width: 2rem; height: 2rem;"></div>
+    <p class="text-subhead">Redirecting to Research Platform...</p>
+    <p class="text-small" style="margin-top: 0.5rem;">
+      If you are not redirected automatically, <a href="pages/login.html">click here to log in</a>.
+    </p>
+  </div>
+
+  <script type="module">
+    import { isAuthenticated } from './shared/auth.js';
+    if (isAuthenticated()) {
+      window.location.replace('pages/feed.html');
+    } else {
+      window.location.replace('pages/login.html');
+    }
+  </script>
+</body>
+</html>

@@ -1,0 +1,71 @@
+/* =====================================================================
+   pages/profile.css
+   Presentation styles for User Profile and Document Workspace
+   ===================================================================== */
+
+.profile-layout-container {
+  max-width: 1000px;
+  margin: 2rem auto;
+  padding: 0 1.5rem;
+}
+
+.profile-hero-card {
+  margin-bottom: 2.5rem;
+  background: linear-gradient(135deg, #ffffff 0%, #f8fafc 100%);
+  border: 1px solid var(--border-default);
+  padding: 2rem;
+}
+
+.profile-hero-content {
+  display: flex;
+  align-items: center;
+  gap: 1.75rem;
+}
+
+.profile-hero-avatar {
+  width: 5rem;
+  height: 5rem;
+  border-radius: 50%;
+  background: linear-gradient(135deg, #4f46e5 0%, #06b6d4 100%);
+  color: #ffffff;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  font-size: 2rem;
+  font-weight: 700;
+  box-shadow: 0 8px 16px rgba(79, 70, 229, 0.2);
+  flex-shrink: 0;
+}
+
+.profile-hero-details h1 {
+  font-size: 1.75rem;
+  margin-bottom: 0.25rem;
+}
+
+.profile-email {
+  font-size: 0.9375rem;
+  color: var(--text-muted);
+  margin-bottom: 0.75rem;
+}
+
+.profile-meta-tags {
+  display: flex;
+  align-items: center;
+  gap: 0.75rem;
+}
+
+.profile-join-date {
+  font-size: 0.8125rem;
+  color: var(--text-subtle);
+}
+
+.profile-docs-section .section-header {
+  margin-bottom: 1.5rem;
+}
+
+/* User Document Item Actions */
+.doc-action-btn-group {
+  display: flex;
+  align-items: center;
+  gap: 0.5rem;
+}

@@ -1,0 +1,140 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+  <meta charset="UTF-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1.0">
+  <meta name="description" content="Dedicated document viewer and conversational AI chat grounded on research papers.">
+  <title>Document Research Chat — Research Platform</title>
+  <link rel="stylesheet" href="../shared/components.css">
+  <link rel="stylesheet" href="document-chat.css">
+</head>
+<body class="chat-page-body">
+  <!-- Top Navigation Header -->
+  <header class="chat-top-nav" role="banner">
+    <div class="chat-nav-left">
+      <a href="feed.html" class="btn btn-ghost btn-sm nav-back-btn">
+        <svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2">
+          <line x1="19" y1="12" x2="5" y2="12"></line>
+          <polyline points="12 19 5 12 12 5"></polyline>
+        </svg>
+        <span>Back to Feed</span>
+      </a>
+      <div class="nav-doc-divider"></div>
+      <div class="nav-doc-info">
+        <span class="badge" id="doc-badge-format">PDF</span>
+        <h1 id="doc-header-title" class="nav-doc-title">Loading document...</h1>
+      </div>
+    </div>
+
+    <div class="chat-nav-right">
+      <button type="button" id="download-doc-btn" class="btn btn-secondary btn-sm" title="Download original research paper">
+        <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2">
+          <path d="M21 15v4a2 2 0 0 1-2 2H5a2 2 0 0 1-2-2v-4"></path>
+          <polyline points="7 10 12 15 17 10"></polyline>
+          <line x1="12" y1="15" x2="12" y2="3"></line>
+        </svg>
+        <span>Download File</span>
+      </button>
+      <div class="user-badge" id="nav-user-badge">
+        <div class="user-avatar" id="nav-avatar">R</div>
+        <span id="nav-username" class="nav-username-text">Researcher</span>
+      </div>
+    </div>
+  </header>
+
+  <!-- Workstation: Two-Column Split View -->
+  <main class="chat-workstation-container" role="main">
+    <!-- Left Pane: Document Viewer -->
+    <section class="viewer-pane" aria-label="Document Content">
+      <div id="viewer-loading" class="pane-state-center">
+        <div class="spinner spinner-dark"></div>
+        <p class="text-subhead" style="margin-top: 0.75rem;">Loading document preview...</p>
+      </div>
+
+      <div id="viewer-container" class="viewer-content-frame" style="display: none;">
+        <!-- Embedded PDF iframe -->
+        <iframe id="pdf-viewer-frame" class="doc-iframe" title="PDF Document Viewer"></iframe>
+        
+        <!-- DOCX / Fallback Container -->
+        <div id="docx-fallback-view" class="docx-preview-box" style="display: none;">
+          <div class="fallback-icon">
+            <svg width="40" height="40" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.8">
+              <path d="M14 2H6a2 2 0 0 0-2 2v16a2 2 0 0 0 2 2h12a2 2 0 0 0 2-2V8z"></path>
+              <polyline points="14 2 14 8 20 8"></polyline>
+              <line x1="16" y1="13" x2="8" y2="13"></line>
+              <line x1="16" y1="17" x2="8" y2="17"></line>
+            </svg>
+          </div>
+          <h2 class="heading-3" id="fallback-doc-title">Document Preview</h2>
+          <p class="text-subhead" style="max-width: 440px; margin: 0.5rem auto 1.5rem auto;">
+            Preview is available for PDF files. You can download this document or ask questions about it in the chat panel.
+          </p>
+          <button type="button" id="fallback-download-btn" class="btn btn-primary btn-sm" title="Download document">
+            <svg width="15" height="15" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2">
+              <path d="M21 15v4a2 2 0 0 1-2 2H5a2 2 0 0 1-2-2v-4"></path>
+              <polyline points="7 10 12 15 17 10"></polyline>
+              <line x1="12" y1="15" x2="12" y2="3"></line>
+            </svg>
+            <span>Download Document</span>
+          </button>
+        </div>
+      </div>
+
+      <div id="viewer-error" class="pane-state-center" style="display: none;">
+        <div class="alert alert-error" style="max-width: 450px;">
+          <span id="viewer-error-message">Could not load document preview.</span>
+        </div>
+      </div>
+    </section>
+
+    <!-- Right Pane: AI Chatbot Panel -->
+    <section class="chat-pane" aria-label="Document Assistant">
+      <div class="chat-header">
+        <div class="chat-header-info">
+          <div class="chat-status-badge">
+            <span class="status-dot"></span>
+            <span class="chat-title">Document assistant</span>
+          </div>
+          <span class="chat-subtitle">Ask questions about this document.</span>
+        </div>
+      </div>
+
+      <!-- Messages Stream -->
+      <div id="chat-messages" class="chat-messages-container" role="log" aria-live="polite">
+        <!-- Welcome Prompt -->
+        <div class="chat-message message-assistant">
+          <div class="message-bubble">
+            <p>Ask any question about this document to get answers based on its content.</p>
+          </div>
+        </div>
+      </div>
+
+      <!-- Chat Input Area -->
+      <div class="chat-input-area">
+        <form id="chat-form" class="chat-input-wrapper">
+          <textarea
+            id="chat-input"
+            class="chat-textarea"
+            placeholder="Ask a question about this document..."
+            rows="1"
+            required
+            aria-label="Ask a question about this document"
+          ></textarea>
+          <button type="submit" id="chat-send-btn" class="chat-send-btn" title="Send question" aria-label="Send question">
+            <svg id="send-icon" width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2">
+              <line x1="22" y1="2" x2="11" y2="13"></line>
+              <polygon points="22 2 15 22 11 13 2 9 22 2"></polygon>
+            </svg>
+            <span id="send-spinner" class="spinner" style="display: none;" aria-hidden="true"></span>
+          </button>
+        </form>
+        <div class="chat-input-footer">
+          <span>Press Enter to send</span>
+        </div>
+      </div>
+    </section>
+  </main>
+
+  <script type="module" src="document-chat.js"></script>
+</body>
+</html>

@@ -1,0 +1,9 @@
+/* =====================================================================
+   pages/register.css
+   Presentation styles for the Registration Page
+   Inherits base structure from login.css
+   ===================================================================== */
+
+.auth-header .heading-1 {
+  font-size: 1.625rem;
+}

@@ -1,0 +1,162 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+  <meta charset="UTF-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1.0">
+  <meta name="description" content="View and manage your research papers, privacy settings, and document analytics.">
+  <title>My Workspace &amp; Profile — Research Platform</title>
+  <link rel="stylesheet" href="../shared/components.css">
+  <link rel="stylesheet" href="feed.css">
+  <link rel="stylesheet" href="profile.css">
+</head>
+<body>
+  <!-- Navigation Header -->
+  <header class="main-nav" role="banner">
+    <div class="nav-container">
+      <div class="nav-left">
+        <a href="feed.html" class="brand-badge">
+          <div class="brand-logo-icon">
+            <svg width="20" height="20" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.2">
+              <path d="M4 19.5A2.5 2.5 0 0 1 6.5 17H20"></path>
+              <path d="M6.5 2H20v20H6.5A2.5 2.5 0 0 1 4 19.5v-15A2.5 2.5 0 0 1 6.5 2z"></path>
+            </svg>
+          </div>
+          <span>Research Platform</span>
+        </a>
+        <nav aria-label="Main Navigation">
+          <ul class="nav-menu">
+            <li><a href="feed.html" class="nav-link">Feed</a></li>
+            <li><a href="profile.html" class="nav-link active">My Documents</a></li>
+          </ul>
+        </nav>
+      </div>
+
+      <div class="nav-right">
+        <button type="button" id="open-upload-btn" class="btn btn-primary btn-sm">
+          <svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2">
+            <path d="M21 15v4a2 2 0 0 1-2 2H5a2 2 0 0 1-2-2v-4"></path>
+            <polyline points="17 8 12 3 7 8"></polyline>
+            <line x1="12" y1="3" x2="12" y2="15"></line>
+          </svg>
+          <span>Upload Document</span>
+        </button>
+
+        <div class="user-badge" id="nav-user-badge">
+          <div class="user-avatar" id="nav-avatar">R</div>
+          <span id="nav-username" class="nav-username-text">Researcher</span>
+        </div>
+
+        <button type="button" id="logout-btn" class="btn btn-ghost btn-sm" title="Log out">
+          <svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2">
+            <path d="M9 21H5a2 2 0 0 1-2-2V5a2 2 0 0 1 2-2h4"></path>
+            <polyline points="16 17 21 12 16 7"></polyline>
+            <line x1="21" y1="12" x2="9" y2="12"></line>
+          </svg>
+        </button>
+      </div>
+    </div>
+  </header>
+
+  <main class="profile-layout-container" role="main">
+    <!-- User Profile Hero Banner -->
+    <section class="card profile-hero-card">
+      <div class="profile-hero-content">
+        <div class="profile-hero-avatar" id="hero-avatar">R</div>
+        <div class="profile-hero-details">
+          <h1 class="heading-1" id="profile-name">Researcher</h1>
+          <p class="profile-email" id="profile-email">researcher@university.edu</p>
+          <div class="profile-meta-tags">
+            <span class="badge badge-public" id="stat-doc-count">0 Documents</span>
+            <span class="profile-join-date" id="profile-joined">Member since 2026</span>
+          </div>
+        </div>
+      </div>
+    </section>
+
+    <!-- Documents Section -->
+    <section class="profile-docs-section">
+      <div class="section-header">
+        <div>
+          <h2 class="heading-2">My documents</h2>
+          <p class="text-subhead">View and manage your uploaded documents.</p>
+        </div>
+      </div>
+
+      <!-- Alert Message -->
+      <div id="profile-alert" class="alert alert-success" style="display: none;" role="alert"></div>
+
+      <!-- Loading State -->
+      <div id="docs-loading" class="feed-loading-state">
+        <div class="spinner spinner-dark"></div>
+        <span>Loading documents...</span>
+      </div>
+
+      <!-- Document List Container -->
+      <div id="user-docs-container" class="document-card-list"></div>
+
+      <!-- Empty State -->
+      <div id="docs-empty-state" class="empty-state" style="display: none;">
+        <div class="empty-icon">
+          <svg width="28" height="28" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2">
+            <path d="M14 2H6a2 2 0 0 0-2 2v16a2 2 0 0 0 2 2h12a2 2 0 0 0 2-2V8z"></path>
+            <polyline points="14 2 14 8 20 8"></polyline>
+          </svg>
+        </div>
+        <h2 class="empty-title">You haven't uploaded any documents yet</h2>
+        <p class="empty-desc">Upload a document to start asking questions about it.</p>
+        <button type="button" id="empty-upload-action" class="btn btn-primary btn-sm">Upload Document</button>
+      </div>
+    </section>
+  </main>
+
+  <!-- Edit Document Metadata Modal -->
+  <div id="edit-doc-modal" class="modal-overlay" style="display: none;" role="dialog" aria-modal="true" aria-labelledby="edit-modal-heading">
+    <div class="modal-dialog">
+      <div class="modal-header">
+        <h2 id="edit-modal-heading" class="modal-title">Edit Document</h2>
+        <button type="button" id="close-edit-modal-btn" class="modal-close-btn" aria-label="Close dialog">
+          <svg width="20" height="20" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2">
+            <line x1="18" y1="6" x2="6" y2="18"></line>
+            <line x1="6" y1="6" x2="18" y2="18"></line>
+          </svg>
+        </button>
+      </div>
+
+      <form id="edit-doc-form" novalidate>
+        <input type="hidden" id="edit-doc-id">
+        <div class="modal-body">
+          <div id="edit-modal-alert" class="alert alert-error" style="display: none;" role="alert"></div>
+
+          <div class="form-group">
+            <label for="edit-title" class="form-label">Title <span class="required-indicator">*</span></label>
+            <input type="text" id="edit-title" class="form-input" required>
+          </div>
+
+          <div class="form-group">
+            <label for="edit-description" class="form-label">Description</label>
+            <textarea id="edit-description" class="form-textarea"></textarea>
+          </div>
+
+          <div class="form-group">
+            <label for="edit-visibility" class="form-label">Visibility <span class="required-indicator">*</span></label>
+            <select id="edit-visibility" class="form-select">
+              <option value="public">Public (Anyone can view and discuss)</option>
+              <option value="private">Private (Only you can access)</option>
+            </select>
+          </div>
+        </div>
+
+        <div class="modal-footer">
+          <button type="button" id="cancel-edit-btn" class="btn btn-secondary btn-sm">Cancel</button>
+          <button type="submit" id="save-edit-btn" class="btn btn-primary btn-sm">
+            <span id="save-btn-text">Save Changes</span>
+            <span id="save-btn-spinner" class="spinner" style="display: none;"></span>
+          </button>
+        </div>
+      </form>
+    </div>
+  </div>
+
+  <script type="module" src="profile.js"></script>
+</body>
+</html>

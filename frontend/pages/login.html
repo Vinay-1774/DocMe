@@ -1,0 +1,224 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+  <meta charset="UTF-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1.0">
+  <meta name="description" content="Sign in to your Research Platform account to manage research papers, query documents, and collaborate.">
+  <title>Log In — Research Platform</title>
+  <link rel="stylesheet" href="../shared/components.css">
+  <link rel="stylesheet" href="login.css">
+</head>
+<body>
+  <div class="auth-wrapper">
+    <!-- Left: Research Platform Showcase -->
+    <aside class="auth-showcase" aria-label="Platform Highlights">
+      <div class="showcase-content">
+        <a href="../index.html" class="brand-badge brand-badge-light">
+          <div class="brand-logo-icon">
+            <svg width="22" height="22" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.2" stroke-linecap="round" stroke-linejoin="round">
+              <path d="M4 19.5A2.5 2.5 0 0 1 6.5 17H20"></path>
+              <path d="M6.5 2H20v20H6.5A2.5 2.5 0 0 1 4 19.5v-15A2.5 2.5 0 0 1 6.5 2z"></path>
+              <path d="M10 6h6"></path>
+              <path d="M10 10h6"></path>
+            </svg>
+          </div>
+          <span class="brand-name">Research Platform</span>
+        </a>
+
+        <div class="showcase-hero">
+          <h1 class="showcase-title">Your documents, easier to explore.</h1>
+          <p class="showcase-desc">
+            Upload your documents and ask questions to find the information you need.
+          </p>
+        </div>
+
+        <div class="showcase-features">
+          <div class="feature-item">
+            <div class="feature-icon">
+              <svg width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round">
+                <path d="M14 2H6a2 2 0 0 0-2 2v16a2 2 0 0 0 2 2h12a2 2 0 0 0 2-2V8z"></path>
+                <polyline points="14 2 14 8 20 8"></polyline>
+                <line x1="16" y1="13" x2="8" y2="13"></line>
+                <line x1="16" y1="17" x2="8" y2="17"></line>
+                <polyline points="10 9 9 9 8 9"></polyline>
+              </svg>
+            </div>
+            <div>
+              <div class="feature-title">Read your documents</div>
+              <div class="feature-subtitle">Open and explore your uploaded files.</div>
+            </div>
+          </div>
+
+          <div class="feature-item">
+            <div class="feature-icon">
+              <svg width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round">
+                <circle cx="12" cy="12" r="10"></circle>
+                <polygon points="16.24 7.76 14.12 14.12 7.76 16.24 9.88 9.88 16.24 7.76"></polygon>
+              </svg>
+            </div>
+            <div>
+              <div class="feature-title">Find related documents</div>
+              <div class="feature-subtitle">Discover documents related to your interests.</div>
+            </div>
+          </div>
+
+          <div class="feature-item">
+            <div class="feature-icon">
+              <svg width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round">
+                <path d="M21 15a2 2 0 0 1-2 2H7l-4 4V5a2 2 0 0 1 2-2h14a2 2 0 0 1 2 2z"></path>
+              </svg>
+            </div>
+            <div>
+              <div class="feature-title">Ask questions</div>
+              <div class="feature-subtitle">Get answers based on your documents.</div>
+            </div>
+          </div>
+        </div>
+      </div>
+    </aside>
+
+    <!-- Right: Authentication Form Panel -->
+    <main class="auth-main" role="main">
+      <div class="auth-card-container">
+        <!-- Mobile Header (Visible on small screens) -->
+        <div class="mobile-brand-bar">
+          <a href="../index.html" class="brand-badge">
+            <div class="brand-logo-icon">
+              <svg width="20" height="20" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.2">
+                <path d="M4 19.5A2.5 2.5 0 0 1 6.5 17H20"></path>
+                <path d="M6.5 2H20v20H6.5A2.5 2.5 0 0 1 4 19.5v-15A2.5 2.5 0 0 1 6.5 2z"></path>
+              </svg>
+            </div>
+            <span>Research Platform</span>
+          </a>
+        </div>
+
+        <div class="auth-header">
+          <h2 class="heading-1">Welcome back</h2>
+          <p class="text-subhead">Enter your email and password to access your documents.</p>
+        </div>
+
+        <!-- Global Alert Box -->
+        <div id="alert-container" class="alert alert-error" role="alert" style="display: none;">
+          <svg class="alert-icon" viewBox="0 0 20 20" fill="currentColor">
+            <path fill-rule="evenodd" d="M10 18a8 8 0 100-16 8 8 0 000 16zM8.707 7.293a1 1 0 00-1.414 1.414L8.586 10l-1.293 1.293a1 1 0 101.414 1.414L10 11.414l1.293 1.293a1 1 0 001.414-1.414L11.414 10l1.293-1.293a1 1 0 00-1.414-1.414L10 8.586 8.707 7.293z" clip-rule="evenodd"/>
+          </svg>
+          <div id="alert-message" class="alert-content"></div>
+        </div>
+
+        <!-- Login Form -->
+        <form id="login-form" class="auth-form" novalidate>
+          <!-- Email Input -->
+          <div class="form-group">
+            <label for="email" class="form-label">
+              <span>Email address <span class="required-indicator" aria-hidden="true">*</span></span>
+            </label>
+            <div class="input-wrapper has-left-icon" id="email-wrapper">
+              <span class="input-icon-left" aria-hidden="true">
+                <svg width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round">
+                  <path d="M4 4h16c1.1 0 2 .9 2 2v12c0 1.1-.9 2-2 2H4c-1.1 0-2-.9-2-2V6c0-1.1.9-2 2-2z"></path>
+                  <polyline points="22,6 12,13 2,6"></polyline>
+                </svg>
+              </span>
+              <input
+                type="email"
+                id="email"
+                name="email"
+                class="form-input"
+                placeholder="name@institution.edu"
+                required
+                autocomplete="email"
+                aria-describedby="email-error"
+                aria-required="true"
+              >
+            </div>
+            <div id="email-error" class="form-error" style="display: none;" role="alert"></div>
+          </div>
+
+          <!-- Password Input -->
+          <div class="form-group">
+            <label for="password" class="form-label">
+              <span>Password <span class="required-indicator" aria-hidden="true">*</span></span>
+            </label>
+            <div class="input-wrapper has-left-icon has-right-action" id="password-wrapper">
+              <span class="input-icon-left" aria-hidden="true">
+                <svg width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round">
+                  <rect x="3" y="11" width="18" height="11" rx="2" ry="2"></rect>
+                  <path d="M7 11V7a5 5 0 0 1 10 0v4"></path>
+                </svg>
+              </span>
+              <input
+                type="password"
+                id="password"
+                name="password"
+                class="form-input"
+                placeholder="Enter your password"
+                required
+                autocomplete="current-password"
+                aria-describedby="password-error"
+                aria-required="true"
+              >
+              <button
+                type="button"
+                id="password-toggle-btn"
+                class="input-action-right"
+                aria-label="Toggle password visibility"
+                tabindex="0"
+              >
+                <!-- Eye open icon -->
+                <svg id="eye-icon" width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round">
+                  <path d="M1 12s4-8 11-8 11 8 11 8-4 8-11 8-11-8-11-8z"></path>
+                  <circle cx="12" cy="12" r="3"></circle>
+                </svg>
+                <!-- Eye off icon (hidden initially) -->
+                <svg id="eye-off-icon" width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" style="display: none;">
+                  <path d="M17.94 17.94A10.07 10.07 0 0 1 12 20c-7 0-11-8-11-8a18.45 18.45 0 0 1 5.06-5.94M9.9 4.24A9.12 9.12 0 0 1 12 4c7 0 11 8 11 8a18.5 18.5 0 0 1-2.16 3.19m-6.72-1.07a3 3 0 1 1-4.24-4.24"></path>
+                  <line x1="1" y1="1" x2="23" y2="23"></line>
+                </svg>
+              </button>
+            </div>
+            <div id="password-error" class="form-error" style="display: none;" role="alert"></div>
+          </div>
+
+          <!-- Submit Button -->
+          <div class="form-actions">
+            <button type="submit" id="login-submit-btn" class="btn btn-primary btn-block">
+              <span id="btn-label">Sign In</span>
+              <span id="btn-spinner" class="spinner" style="display: none;" aria-hidden="true"></span>
+            </button>
+          </div>
+        </form>
+
+        <!-- Registration Link -->
+        <div class="auth-footer-prompt">
+          <p class="text-subhead">
+            New to the platform?
+            <a href="register.html" class="auth-signup-link">Create an account</a>
+          </p>
+        </div>
+
+        <!-- Quick Demo Account Helper -->
+        <div class="demo-account-box" id="demo-account-box">
+          <div class="demo-box-header">
+            <svg width="15" height="15" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2">
+              <circle cx="12" cy="12" r="10"></circle>
+              <line x1="12" y1="16" x2="12" y2="12"></line>
+              <line x1="12" y1="8" x2="12.01" y2="8"></line>
+            </svg>
+            <span>Demo Account</span>
+          </div>
+          <div class="demo-box-body">
+            <span>demo@research.edu</span>
+            <button type="button" id="autofill-demo-btn" class="demo-fill-btn" title="Autofill credentials">
+              Use Demo Account
+            </button>
+          </div>
+        </div>
+
+      </div>
+    </main>
+  </div>
+
+  <script type="module" src="login.js"></script>
+</body>
+</html>
