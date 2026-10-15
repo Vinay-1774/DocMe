@@ -14,128 +14,51 @@ from sqlalchemy.orm import Session
 logger = logging.getLogger(__name__)
 
 # Centralized configuration
-try:
-    from app.config import CORS_ORIGINS, REFRESH_TOKEN_EXPIRE_DAYS, UPLOAD_DIR
-except ImportError:
-    try:
-        from backend.app.config import CORS_ORIGINS, REFRESH_TOKEN_EXPIRE_DAYS, UPLOAD_DIR
-    except ImportError:
-        from config import CORS_ORIGINS, REFRESH_TOKEN_EXPIRE_DAYS, UPLOAD_DIR
+from backend.app.config import (
+    COOKIE_SAMESITE,
+    COOKIE_SECURE,
+    CORS_ORIGINS,
+    MAX_UPLOAD_SIZE_BYTES,
+    MAX_UPLOAD_SIZE_MB,
+    REFRESH_TOKEN_EXPIRE_DAYS,
+    UPLOAD_DIR,
+)
 
 # Database dependency and models
-try:
-    from app.database import get_db
-    from app.models import Comment, Document, DocumentChunk, User
-    from app.schema import (
-        ChatRequest,
-        ChatResponse,
-        ChatSource,
-        CommentCreate,
-        CommentResponse,
-        DocumentResponse,
-        DocumentUpdate,
-        PopularDocumentResponse,
-        TokenResponse,
-        UserCreate,
-        UserLogin,
-        UserRankingResponse,
-        UserResponse,
-    )
-    from app.auth import (
-        authenticate_user_by_email,
-        create_access_token,
-        create_refresh_token,
-        get_current_user,
-        get_optional_current_user,
-        login_oauth2,
-        login_user,
-        register_user,
-        verify_refresh_token,
-    )
-    from app.ingestion import compute_file_hash, generate_embedding, ingest_document, SUPPORTED_EXTENSIONS
-    from app.retrieval import retrieve_documents
-    from app.chat import stream_response
-    from app.workflow import qa_workflow
-except ImportError:
-    try:
-        from backend.app.database import get_db
-        from backend.app.models import Comment, Document, DocumentChunk, User
-        from backend.app.schema import (
-            ChatRequest,
-            ChatResponse,
-            ChatSource,
-            CommentCreate,
-            CommentResponse,
-            DocumentResponse,
-            DocumentUpdate,
-            PopularDocumentResponse,
-            TokenResponse,
-            UserCreate,
-            UserLogin,
-            UserRankingResponse,
-            UserResponse,
-        )
-        from backend.app.auth import (
-            authenticate_user_by_email,
-            create_access_token,
-            create_refresh_token,
-            get_current_user,
-            get_optional_current_user,
-            login_oauth2,
-            login_user,
-            register_user,
-            verify_refresh_token,
-        )
-        from backend.app.ingestion import compute_file_hash, generate_embedding, ingest_document, SUPPORTED_EXTENSIONS
-        from backend.app.retrieval import retrieve_documents
-        from backend.app.chat import stream_response
-        from backend.app.workflow import qa_workflow
-    except ImportError:
-        from database import get_db
-        from models import Comment, Document, DocumentChunk, User
-        from schema import (
-            ChatRequest,
-            ChatResponse,
-            ChatSource,
-            CommentCreate,
-            CommentResponse,
-            DocumentResponse,
-            DocumentUpdate,
-            PopularDocumentResponse,
-            TokenResponse,
-            UserCreate,
-            UserLogin,
-            UserRankingResponse,
-            UserResponse,
-        )
-        from auth import (
-            authenticate_user_by_email,
-            create_access_token,
-            create_refresh_token,
-            get_current_user,
-            get_optional_current_user,
-            login_oauth2,
-            login_user,
-            register_user,
-            verify_refresh_token,
-        )
-        from ingestion import compute_file_hash, generate_embedding, ingest_document, SUPPORTED_EXTENSIONS
-        from retrieval import retrieve_documents
-        from chat import stream_response
-        from workflow import qa_workflow
-
-# Clean dynamic import of hyphenated semantic-search module without duplication
-import importlib.util
-from pathlib import Path
-
-_search_path = Path(__file__).resolve().parent / "semantic-search.py"
-if not _search_path.exists():
-    _search_path = Path(__file__).resolve().parent.parent / "app" / "semantic-search.py"
-
-_search_spec = importlib.util.spec_from_file_location("semantic_search", _search_path)
-_search_mod = importlib.util.module_from_spec(_search_spec)
-_search_spec.loader.exec_module(_search_mod)
-perform_semantic_search = getattr(_search_mod, "perform_semantic_search", getattr(_search_mod, "search_documents"))
+from backend.app.database import get_db
+from backend.app.models import Comment, Document, DocumentChunk, User
+from backend.app.schema import (
+    ChatRequest,
+    ChatResponse,
+    ChatSource,
+    CommentCreate,
+    CommentResponse,
+    DocumentResponse,
+    DocumentUpdate,
+    PopularDocumentResponse,
+    TokenResponse,
+    UserCreate,
+    UserLogin,
+    UserRankingResponse,
+    UserResponse,
+)
+from backend.app.auth import (
+    authenticate_user_by_email,
+    create_access_token,
+    create_refresh_token,
+    get_current_user,
+    get_optional_current_user,
+    login_oauth2,
+    login_user,
+    register_user,
+    verify_refresh_token,
+)
+from backend.app.ingestion import compute_file_hash, generate_embedding, ingest_document, SUPPORTED_EXTENSIONS
+from backend.app.retrieval import retrieve_documents
+from backend.app.chat import stream_response
+from backend.app.workflow import qa_workflow
+# Direct import of semantic search module
+from backend.app.semantic_search import perform_semantic_search
 
 
 # Initialize FastAPI application
@@ -182,8 +105,8 @@ def _set_refresh_cookie(response: Response, user_id: int) -> str:
         key="rp_refresh_token",
         value=refresh_token,
         httponly=True,
-        samesite="lax",
-        secure=False,
+        samesite=COOKIE_SAMESITE,
+        secure=COOKIE_SECURE,
         max_age=REFRESH_TOKEN_EXPIRE_DAYS * 86400,
         path="/",
     )
@@ -250,7 +173,12 @@ def refresh_session(
     try:
         user_id = verify_refresh_token(token)
     except Exception:
-        response.delete_cookie(key="rp_refresh_token", path="/")
+        response.delete_cookie(
+            key="rp_refresh_token",
+            path="/",
+            secure=COOKIE_SECURE,
+            samesite=COOKIE_SAMESITE,
+        )
         raise HTTPException(
             status_code=status.HTTP_401_UNAUTHORIZED,
             detail="Invalid or expired refresh token. Please log in again.",
@@ -258,7 +186,12 @@ def refresh_session(
 
     user = db.scalar(select(User).where(User.id == user_id))
     if not user:
-        response.delete_cookie(key="rp_refresh_token", path="/")
+        response.delete_cookie(
+            key="rp_refresh_token",
+            path="/",
+            secure=COOKIE_SECURE,
+            samesite=COOKIE_SAMESITE,
+        )
         raise HTTPException(
             status_code=status.HTTP_401_UNAUTHORIZED,
             detail="User account associated with this session no longer exists.",
@@ -276,7 +209,12 @@ def refresh_session(
 @app.post("/logout")
 def logout(response: Response):
     """Revokes the persistent session by clearing the HttpOnly refresh token cookie."""
-    response.delete_cookie(key="rp_refresh_token", path="/")
+    response.delete_cookie(
+        key="rp_refresh_token",
+        path="/",
+        secure=COOKIE_SECURE,
+        samesite=COOKIE_SAMESITE,
+    )
     return {"message": "Logged out successfully"}
 
 
@@ -465,11 +403,25 @@ def upload_document(
     saved_file_path = UPLOAD_DIR / safe_filename
     file_created = False
 
+    if file.size and file.size > MAX_UPLOAD_SIZE_BYTES:
+        raise HTTPException(
+            status_code=status.HTTP_413_REQUEST_ENTITY_TOO_LARGE,
+            detail=f"File exceeds maximum allowed size of {MAX_UPLOAD_SIZE_MB}MB.",
+        )
+
     # 1. Save uploaded file contents to disk
     try:
         with open(saved_file_path, "wb") as buffer:
             shutil.copyfileobj(file.file, buffer)
         file_created = True
+        if saved_file_path.stat().st_size > MAX_UPLOAD_SIZE_BYTES:
+            saved_file_path.unlink(missing_ok=True)
+            raise HTTPException(
+                status_code=status.HTTP_413_REQUEST_ENTITY_TOO_LARGE,
+                detail=f"File exceeds maximum allowed size of {MAX_UPLOAD_SIZE_MB}MB.",
+            )
+    except HTTPException:
+        raise
     except Exception as e:
         logger.error("Failed to write uploaded file to disk: %s", e, exc_info=True)
         if file_created and saved_file_path.is_file():
@@ -827,3 +779,15 @@ def document_chat(
         answer=workflow_result.get("answer", ""),
         sources=sources_response,
     )
+
+
+if __name__ == "__main__":
+    import sys
+    from pathlib import Path
+    project_root = Path(__file__).resolve().parent.parent.parent
+    if str(project_root) not in sys.path:
+        sys.path.insert(0, str(project_root))
+    import uvicorn
+    port = int(os.getenv("PORT", "8000"))
+    uvicorn.run("backend.app.main:app", host="0.0.0.0", port=port, reload=True)
+

@@ -8,14 +8,7 @@ logger = logging.getLogger(__name__)
 from sqlalchemy import func, select
 from sqlalchemy.orm import Session
 
-# Import centralized configuration
-try:
-    from app.config import CHUNK_OVERLAP, CHUNK_SIZE, GEMINI_API_KEY, GEMINI_EMBEDDING_MODEL
-except ImportError:
-    try:
-        from backend.app.config import CHUNK_OVERLAP, CHUNK_SIZE, GEMINI_API_KEY, GEMINI_EMBEDDING_MODEL
-    except ImportError:
-        from config import CHUNK_OVERLAP, CHUNK_SIZE, GEMINI_API_KEY, GEMINI_EMBEDDING_MODEL
+from backend.app.config import CHUNK_OVERLAP, CHUNK_SIZE, GEMINI_API_KEY, GEMINI_EMBEDDING_MODEL
 
 # Safe imports for extraction and embedding providers
 try:
@@ -34,13 +27,7 @@ except ImportError:
     genai = None
 
 # Database models
-try:
-    from app.models import Document, DocumentChunk
-except ImportError:
-    try:
-        from backend.app.models import Document, DocumentChunk
-    except ImportError:
-        from models import Document, DocumentChunk
+from backend.app.models import Document, DocumentChunk
 
 
 SUPPORTED_EXTENSIONS = {".pdf", ".docx"}

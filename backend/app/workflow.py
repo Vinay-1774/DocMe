@@ -1,13 +1,7 @@
 from langgraph.graph import END, StateGraph
 
 # Import shared state type and node functions from nodes.py
-try:
-    from app.nodes import GraphState, generate_node, retrieve_node
-except ImportError:
-    try:
-        from backend.app.nodes import GraphState, generate_node, retrieve_node
-    except ImportError:
-        from nodes import GraphState, generate_node, retrieve_node
+from backend.app.nodes import GraphState, generate_node, retrieve_node
 
 
 # 1. Initialize StateGraph with the shared state type

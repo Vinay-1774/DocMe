@@ -1,20 +1,23 @@
-# Research Platform Backend
+# DocMe — Research & Document Intelligence Platform
 
-A backend platform for document ingestion, retrieval-augmented generation (RAG), and document-specific conversational question-answering powered by FastAPI, PostgreSQL (pgvector), SQLAlchemy 2.x, and LangGraph.
+DocMe is an end-to-end research document platform featuring document ingestion (PDF/DOCX), pgvector semantic vector search, LangGraph RAG conversational Q&A, and scholarly document sharing.
+
+Built with Python, FastAPI, PostgreSQL (pgvector), SQLAlchemy 2.x, LangGraph, and a vanilla JavaScript frontend.
 
 ---
 
 ## Architecture & Tech Stack
 
-- **Framework**: [FastAPI](https://fastapi.tiangolo.com/) with asynchronous request handling
-- **Database**: PostgreSQL with `pgvector` for vector similarity search
-- **ORM**: [SQLAlchemy 2.x](https://docs.sqlalchemy.org/en/20/) with `DeclarativeBase` and `Session`
+- **Backend Framework**: [FastAPI](https://fastapi.tiangolo.com/) with asynchronous request handling
+- **Database**: PostgreSQL with `pgvector` for vector similarity search (Supabase PostgreSQL ready)
+- **ORM**: [SQLAlchemy 2.x](https://docs.sqlalchemy.org/en/20/) with `DeclarativeBase` and connection pooling
 - **Schemas & Validation**: [Pydantic v2](https://docs.pydantic.dev/latest/)
-- **Authentication**: JWT (JSON Web Tokens) with `HS256` and bcrypt password hashing
-- **Ingestion**: Supports PDF (`pypdf`) and Word documents (`python-docx`)
-- **Embeddings & LLM**: Google Generative AI (Gemini) with 768-dimensional embeddings (`models/gemini-embedding-001` or compatible)
-- **Workflow / RAG Orchestration**: [LangGraph](https://github.com/langchain-ai/langgraph) state graph (`retrieve` -> `generate` -> `END`)
-- **Testing**: `pytest`, `pytest-cov`, `httpx`, and `TestClient` with isolated test database support
+- **Authentication**: JWT access tokens and HttpOnly refresh tokens with bcrypt password hashing
+- **Ingestion**: Document text extraction for PDF (`pypdf`) and Word (`python-docx`) with chunking
+- **Embeddings & LLM**: Google Generative AI (Gemini `text-embedding-004` and `gemini-2.0-flash` / `gemini-1.5-flash`)
+- **Workflow / RAG Orchestration**: [LangGraph](https://github.com/langchain-ai/langgraph) state graph (`retrieve` -> `generate` -> `END`) with SSE streaming
+- **Frontend**: Clean Vanilla JavaScript (ES Modules), HTML5, and CSS3
+- **Testing**: `pytest`, `httpx`, and `TestClient` with isolated test database support
 
 ---
 
@@ -25,20 +28,27 @@ researchPlatform/
 ├── backend/
 │   ├── app/
 │   │   ├── auth.py          # Password hashing, JWT creation/verification, current-user dependency
-│   │   ├── chat.py          # Answer generation with Gemini and streaming support
-│   │   ├── database.py      # SQLAlchemy 2.x engine, SessionLocal, Base, init_db()
+│   │   ├── chat.py          # Grounded answer generation with Gemini and SSE streaming
+│   │   ├── config.py        # Canonical environment loading and centralized configuration
+│   │   ├── database.py      # SQLAlchemy 2.x engine, connection pool, Base, init_db()
 │   │   ├── ingestion.py     # Document text extraction (PDF/DOCX), chunking, pgvector embedding storage
+│   │   ├── main.py          # Canonical FastAPI entrypoint, routes, CORS, cookie auth
 │   │   ├── models.py        # SQLAlchemy models (User, Document, DocumentChunk, Comment)
 │   │   ├── nodes.py         # LangGraph workflow nodes (retrieve_node, generate_node)
 │   │   ├── retrieval.py     # pgvector cosine similarity search with server-side authorization
 │   │   ├── schema.py        # Pydantic v2 request/response schemas
+│   │   ├── semantic_search.py # pgvector and keyword document search
 │   │   └── workflow.py      # LangGraph compiled state graph (workflow, qa_workflow)
-│   ├── config.py            # Centralized environment loading and configuration
-│   ├── main.py              # FastAPI app instance, CORS middleware, and API route definitions
 │   └── uploads/             # Local filesystem storage for uploaded documents (.gitignored)
+├── frontend/
+│   ├── index.html           # Landing & authentication router
+│   ├── pages/               # Application views (feed, login, register, profile, document-chat)
+│   └── shared/              # Reusable API client, auth helpers, Markdown renderer, components.css
 ├── tests/
 │   └── test_backend.py      # Comprehensive test suite covering auth, documents, permissions, RAG
-├── requirements.txt         # Pinned production and test dependencies
+├── .env.example             # Complete environment configuration template
+├── vercel.json              # Vercel deployment and routing configuration
+├── requirements.txt         # Production and test dependencies
 ├── .gitignore               # Excludes secrets, virtual environments, cache, and uploaded files
 └── README.md                # Project documentation and guide
 ```
@@ -96,7 +106,13 @@ Ensure the PostgreSQL server is running and the database exists.
 Start the FastAPI development server with Uvicorn:
 
 ```bash
-uvicorn backend.main:app --reload --host 0.0.0.0 --port 8000
+uvicorn backend.app.main:app --reload
+```
+
+Or specify host and port explicitly:
+
+```bash
+uvicorn backend.app.main:app --reload --host 0.0.0.0 --port 8000
 ```
 
 Once running:
@@ -171,3 +187,51 @@ All 12 test suites cover:
 - Discovery endpoints (`/feed`, `/documents/popular`, `/users/ranking`)
 - pgvector similarity retrieval with database-level ownership filtering
 - LangGraph Q&A chat endpoint with source citations
+
+---
+
+## Production Deployment Guide
+
+### 1. Database Deployment: Supabase PostgreSQL (Free Plan)
+
+1. Create a free project at [supabase.com](https://supabase.com).
+2. Go to **Database > Extensions** and verify `vector` is enabled.
+3. In **Project Settings > Database**, find your connection string.
+   - For Render web services, use the direct or pooler connection string with `sslmode=require`:
+   ```
+   postgresql+psycopg://postgres.[PROJECT-REF]:[YOUR-PASSWORD]@aws-0-[REGION].pooler.supabase.com:6543/postgres?sslmode=require
+   ```
+4. Run schema initialization against Supabase once:
+   ```bash
+   DATABASE_URL="<your_supabase_url>" python -m backend.app.database
+   ```
+
+### 2. Backend Deployment: Render (Free Web Service)
+
+1. Create a new **Web Service** on [render.com](https://render.com) linked to your GitHub repository.
+2. Configure settings:
+   - **Environment**: `Python 3`
+   - **Build Command**: `pip install -r requirements.txt`
+   - **Start Command**: `uvicorn backend.app.main:app --host 0.0.0.0 --port $PORT`
+3. Configure Environment Variables in Render:
+   - `DATABASE_URL`: Your Supabase connection string (`postgresql+psycopg://...`)
+   - `JWT_SECRET_KEY`: Secure random string (`openssl rand -hex 32`)
+   - `GEMINI_API_KEY`: Your Google AI Studio API key
+   - `CORS_ORIGINS`: Your Vercel frontend URL (e.g. `https://docme.vercel.app`)
+   - `COOKIE_SECURE`: `true`
+   - `COOKIE_SAMESITE`: `none` (required for cross-domain cookie transmission over HTTPS)
+4. Deploy the service. Once active, note the assigned URL: `https://<service-name>.onrender.com`.
+
+> [!NOTE]
+> **Render Free Plan Characteristics**:
+> - Free instances spin down after 15 minutes of inactivity. The first request after idle takes ~30-50 seconds (cold start).
+> - Render's local disk is ephemeral. Stored vector chunks and embeddings in Supabase persist indefinitely across restarts. Original document downloads rely on local disk; for permanent original file persistence across Render rebuilds in production, attach Supabase Storage or an S3 bucket.
+
+### 3. Frontend Deployment: Vercel (Free Plan)
+
+1. Import your GitHub repository on [vercel.com](https://vercel.com).
+2. The included `vercel.json` automatically configures URL rewriting for the static frontend.
+3. In **Settings > Environment Variables**, add:
+   - `RESEARCH_API_URL` or `DOCME_API_URL`: Your Render backend URL (e.g. `https://<service-name>.onrender.com`)
+4. Deploy the project. The frontend will be live on `https://<your-project>.vercel.app`.
+

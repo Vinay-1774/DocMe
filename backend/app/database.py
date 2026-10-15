@@ -1,20 +1,20 @@
+import logging
 from typing import Generator
 from sqlalchemy import create_engine, text
 from sqlalchemy.orm import DeclarativeBase, Session, sessionmaker
 
-try:
-    from app.config import DATABASE_URL
-except ImportError:
-    try:
-        from backend.app.config import DATABASE_URL
-    except ImportError:
-        from config import DATABASE_URL
+from backend.app.config import DATABASE_URL, DB_MAX_OVERFLOW, DB_POOL_RECYCLE, DB_POOL_SIZE
+
+logger = logging.getLogger(__name__)
 
 
-# Create the SQLAlchemy engine with connection pool settings
+# Create the SQLAlchemy engine with production connection pool settings
 engine = create_engine(
     DATABASE_URL,
     pool_pre_ping=True,
+    pool_size=DB_POOL_SIZE,
+    max_overflow=DB_MAX_OVERFLOW,
+    pool_recycle=DB_POOL_RECYCLE,
 )
 
 # Session factory for creating database sessions
@@ -46,17 +46,14 @@ def init_db() -> None:
     Safe to run repeatedly; does not destroy existing data.
     """
     # Import all models so that Base.metadata is fully populated
-    try:
-        from app import models  # noqa: F401
-    except ImportError:
-        try:
-            from backend.app import models  # noqa: F401
-        except ImportError:
-            import models  # noqa: F401
+    from backend.app import models  # noqa: F401
 
     with engine.connect() as conn:
-        conn.execute(text("CREATE EXTENSION IF NOT EXISTS vector;"))
-        conn.commit()
+        try:
+            conn.execute(text("CREATE EXTENSION IF NOT EXISTS vector;"))
+            conn.commit()
+        except Exception as e:
+            logger.warning("CREATE EXTENSION IF NOT EXISTS vector skipped or non-fatal: %s", e)
 
     Base.metadata.create_all(bind=engine)
 

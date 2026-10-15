@@ -7,40 +7,10 @@ from sqlalchemy.orm import Session
 logger = logging.getLogger(__name__)
 
 # Import centralized configuration
-try:
-    from app.config import RETRIEVAL_LIMIT
-except ImportError:
-    try:
-        from backend.app.config import RETRIEVAL_LIMIT
-    except ImportError:
-        from config import RETRIEVAL_LIMIT
-
-# Import database session factory
-try:
-    from app.database import SessionLocal
-except ImportError:
-    try:
-        from backend.app.database import SessionLocal
-    except ImportError:
-        from database import SessionLocal
-
-# Import database models
-try:
-    from app.models import Document, DocumentChunk
-except ImportError:
-    try:
-        from backend.app.models import Document, DocumentChunk
-    except ImportError:
-        from models import Document, DocumentChunk
-
-# Reuse shared embedding generation from ingestion.py
-try:
-    from app.ingestion import generate_embedding
-except ImportError:
-    try:
-        from backend.app.ingestion import generate_embedding
-    except ImportError:
-        from ingestion import generate_embedding
+from backend.app.config import RETRIEVAL_LIMIT
+from backend.app.database import SessionLocal
+from backend.app.models import Document, DocumentChunk
+from backend.app.ingestion import generate_embedding
 
 
 def retrieve_documents(

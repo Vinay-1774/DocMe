@@ -5,16 +5,7 @@ from pgvector.sqlalchemy import Vector
 from sqlalchemy import CheckConstraint, DateTime, ForeignKey, Index, String, Text, func
 from sqlalchemy.orm import Mapped, mapped_column, relationship
 
-try:
-    from app.database import Base
-except ImportError:
-    try:
-        from backend.app.database import Base
-    except ImportError:
-        try:
-            from .database import Base
-        except ImportError:
-            from database import Base
+from backend.app.database import Base
 
 
 class User(Base):

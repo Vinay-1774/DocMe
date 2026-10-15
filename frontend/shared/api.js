@@ -6,8 +6,13 @@
 
 import { getToken, setToken, clearAuth } from './auth.js';
 
-// Backend runs on port 8001 by default; allow override via window or localStorage
-export const API_BASE_URL = window.RESEARCH_API_URL || 'http://127.0.0.1:8001';
+// Backend runs on port 8000 by default; allow override via window or localStorage
+export const API_BASE_URL =
+  window.DOCME_API_URL ||
+  window.RESEARCH_API_URL ||
+  localStorage.getItem('DOCME_API_URL') ||
+  localStorage.getItem('RESEARCH_API_URL') ||
+  'http://127.0.0.1:8000';
 
 /**
  * Custom error class capturing HTTP status code, API detail, and raw response.

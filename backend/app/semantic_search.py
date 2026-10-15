@@ -1,10 +1,5 @@
 """
-backend/app/semantic-search.py
 Dedicated semantic document search module using PostgreSQL pgvector and keyword matching.
-
-NOTE: This file has a hyphen in its filename ('semantic-search.py'), which is not a valid
-Python identifier for direct `import app.semantic-search`. To import this module cleanly
-without duplicating its logic, use `importlib.util.spec_from_file_location`.
 """
 import logging
 from typing import List, Optional
@@ -14,22 +9,10 @@ from sqlalchemy.orm import Session
 logger = logging.getLogger(__name__)
 
 # Import database models
-try:
-    from app.models import Document, DocumentChunk
-except ImportError:
-    try:
-        from backend.app.models import Document, DocumentChunk
-    except ImportError:
-        from models import Document, DocumentChunk
+from backend.app.models import Document, DocumentChunk
 
 # Reuse existing shared embedding generation from ingestion.py
-try:
-    from app.ingestion import generate_embedding
-except ImportError:
-    try:
-        from backend.app.ingestion import generate_embedding
-    except ImportError:
-        from ingestion import generate_embedding
+from backend.app.ingestion import generate_embedding
 
 
 def perform_semantic_search(

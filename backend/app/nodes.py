@@ -6,22 +6,10 @@ from sqlalchemy.orm import Session
 logger = logging.getLogger(__name__)
 
 # Import retrieval functionality from retrieval.py
-try:
-    from app.retrieval import retrieve_documents
-except ImportError:
-    try:
-        from backend.app.retrieval import retrieve_documents
-    except ImportError:
-        from retrieval import retrieve_documents
+from backend.app.retrieval import retrieve_documents
 
 # Import response generation functionality from chat.py
-try:
-    from app.chat import generate_response
-except ImportError:
-    try:
-        from backend.app.chat import generate_response
-    except ImportError:
-        from chat import generate_response
+from backend.app.chat import generate_response
 
 
 class GraphState(TypedDict, total=False):

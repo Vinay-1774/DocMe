@@ -12,22 +12,10 @@ from sqlalchemy.orm import sessionmaker
 
 # Ensure project root is in sys.path
 BASE_DIR = Path(__file__).resolve().parent.parent
-sys.path.insert(0, str(BASE_DIR))
+if str(BASE_DIR) not in sys.path:
+    sys.path.insert(0, str(BASE_DIR))
 
-# Unify app and backend.app in sys.modules so SQLAlchemy models are not loaded under dual paths
-import app
-import importlib
-sys.modules['backend'] = sys.modules.get('backend', type(sys)('backend'))
-sys.modules['backend.app'] = app
-for sub in ['config', 'database', 'models', 'schema', 'auth', 'ingestion', 'retrieval', 'chat', 'nodes', 'workflow', 'main']:
-    mod = importlib.import_module(f'app.{sub}')
-    sys.modules[f'backend.app.{sub}'] = mod
-    setattr(app, sub, mod)
-
-try:
-    from backend.app import config
-except ImportError:
-    from backend import config
+from backend.app import config
 TEST_DB_NAME = "research_platform_test"
 
 test_db_url = URL.create(
@@ -44,10 +32,7 @@ TestSessionLocal = sessionmaker(autocommit=False, autoflush=False, bind=test_eng
 
 from backend.app.database import Base, get_db
 from backend.app.models import Comment, Document, DocumentChunk, User
-try:
-    from backend.app.main import app
-except ImportError:
-    from backend.main import app
+from backend.app.main import app
 
 
 def override_get_db():
@@ -1173,22 +1158,10 @@ def test_document_download_authentication_and_permissions(mock_embeds, mock_embe
 
 def test_semantic_search_direct_module_execution(client):
     """
-    Tests that app/semantic-search.py module can be imported dynamically via importlib
-    and executed directly with access-control filtering.
+    Tests that backend/app/semantic_search.py module can be imported and executed directly with access-control filtering.
     """
-    import importlib.util
-    from pathlib import Path
-
-    # Locate semantic-search.py dynamically
-    module_path = Path("backend/app/semantic-search.py")
-    if not module_path.is_file():
-        module_path = Path("app/semantic-search.py")
-    assert module_path.is_file(), f"semantic-search.py not found at {module_path}"
-
-    spec = importlib.util.spec_from_file_location("app_semantic_search_test", str(module_path))
-    assert spec is not None
-    mod = importlib.util.module_from_spec(spec)
-    spec.loader.exec_module(mod)
+    from backend.app.semantic_search import perform_semantic_search
+    from backend.app import semantic_search as mod
 
     assert hasattr(mod, "perform_semantic_search")
 

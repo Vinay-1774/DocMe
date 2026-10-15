@@ -1,0 +1,21 @@
+{
+  "cleanUrls": true,
+  "rewrites": [
+    {
+      "source": "/",
+      "destination": "/frontend/index.html"
+    },
+    {
+      "source": "/pages/:path*",
+      "destination": "/frontend/pages/:path*"
+    },
+    {
+      "source": "/shared/:path*",
+      "destination": "/frontend/shared/:path*"
+    },
+    {
+      "source": "/:path*",
+      "destination": "/frontend/:path*"
+    }
+  ]
+}

@@ -10,43 +10,17 @@ from sqlalchemy import select
 from sqlalchemy.orm import Session
 
 # Import centralized configuration
-try:
-    from app.config import (
-        ACCESS_TOKEN_EXPIRE_MINUTES,
-        JWT_ALGORITHM,
-        JWT_SECRET_KEY,
-        REFRESH_TOKEN_EXPIRE_DAYS,
-    )
-except ImportError:
-    try:
-        from backend.app.config import (
-            ACCESS_TOKEN_EXPIRE_MINUTES,
-            JWT_ALGORITHM,
-            JWT_SECRET_KEY,
-            REFRESH_TOKEN_EXPIRE_DAYS,
-        )
-    except ImportError:
-        from config import (
-            ACCESS_TOKEN_EXPIRE_MINUTES,
-            JWT_ALGORITHM,
-            JWT_SECRET_KEY,
-            REFRESH_TOKEN_EXPIRE_DAYS,
-        )
+from backend.app.config import (
+    ACCESS_TOKEN_EXPIRE_MINUTES,
+    JWT_ALGORITHM,
+    JWT_SECRET_KEY,
+    REFRESH_TOKEN_EXPIRE_DAYS,
+)
 
 # Database dependency and models
-try:
-    from app.database import get_db
-    from app.models import User
-    from app.schema import UserCreate, UserLogin
-except ImportError:
-    try:
-        from backend.app.database import get_db
-        from backend.app.models import User
-        from backend.app.schema import UserCreate, UserLogin
-    except ImportError:
-        from database import get_db
-        from models import User
-        from schema import UserCreate, UserLogin
+from backend.app.database import get_db
+from backend.app.models import User
+from backend.app.schema import UserCreate, UserLogin
 
 
 oauth2_scheme = OAuth2PasswordBearer(tokenUrl="token")

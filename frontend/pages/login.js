@@ -27,7 +27,6 @@ document.addEventListener('DOMContentLoaded', () => {
   const passwordToggleBtn = document.getElementById('password-toggle-btn');
   const eyeIcon = document.getElementById('eye-icon');
   const eyeOffIcon = document.getElementById('eye-off-icon');
-  const autofillDemoBtn = document.getElementById('autofill-demo-btn');
 
   // Check URL query parameters for notifications
   const params = new URLSearchParams(window.location.search);
@@ -45,16 +44,6 @@ document.addEventListener('DOMContentLoaded', () => {
       eyeIcon.style.display = isPassword ? 'none' : 'block';
       eyeOffIcon.style.display = isPassword ? 'block' : 'none';
       passwordToggleBtn.setAttribute('aria-label', isPassword ? 'Hide password' : 'Show password');
-    });
-  }
-
-  // Quick Demo Account Autofill
-  if (autofillDemoBtn) {
-    autofillDemoBtn.addEventListener('click', () => {
-      clearErrors();
-      emailInput.value = 'demo@research.edu';
-      passwordInput.value = 'Password123!';
-      emailInput.focus();
     });
   }
 
