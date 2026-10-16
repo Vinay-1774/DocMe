@@ -9,7 +9,7 @@
 import { api, ApiError } from '../shared/api.js';
 import { requireAuth, getUser, setupUserMenuAndLogout, renderAvatarHtml } from '../shared/auth.js';
 
-document.addEventListener('DOMContentLoaded', async () => {
+async function initFeedPage() {
   // Ensure user is authenticated
   if (!await requireAuth()) return;
 
@@ -91,8 +91,9 @@ document.addEventListener('DOMContentLoaded', async () => {
       } else {
         loadFeed();
       }
-    } catch {
-      showUploadError('Could not upload document. Please try again.');
+    } catch (err) {
+      const msg = err instanceof ApiError ? err.message : 'Could not upload document. Please try again.';
+      showUploadError(msg);
     } finally {
       submitUploadBtn.disabled = false;
       uploadBtnText.textContent = 'Upload';
@@ -288,11 +289,12 @@ document.addEventListener('DOMContentLoaded', async () => {
       documents.forEach((doc) => {
         container.appendChild(createDocumentCard(doc));
       });
-    } catch {
+    } catch (err) {
       loadingEl.style.display = 'none';
+      const msg = err instanceof ApiError ? err.message : 'Could not load documents. Please try again.';
       container.innerHTML = `
         <div class="alert alert-error">
-          Could not load documents. Please try again.
+          ${escapeHtml(msg)}
         </div>
       `;
     }
@@ -383,8 +385,9 @@ document.addEventListener('DOMContentLoaded', async () => {
       try {
         downloadBtn.disabled = true;
         await api.downloadDocument(doc.id);
-      } catch {
-        showFeedAlert('Could not download document. Please try again.', 'error');
+      } catch (err) {
+        const msg = err instanceof ApiError ? err.message : 'Could not download document. Please try again.';
+        showFeedAlert(msg, 'error');
       } finally {
         downloadBtn.disabled = false;
       }
@@ -526,4 +529,10 @@ document.addEventListener('DOMContentLoaded', async () => {
       .replace(/"/g, '&quot;')
       .replace(/'/g, '&#039;');
   }
-});
+}
+
+if (document.readyState === 'loading') {
+  document.addEventListener('DOMContentLoaded', initFeedPage);
+} else {
+  initFeedPage();
+}

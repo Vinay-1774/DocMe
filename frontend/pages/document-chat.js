@@ -8,7 +8,7 @@ import { api, ApiError } from '../shared/api.js';
 import { requireAuth, getUser, setupUserMenuAndLogout } from '../shared/auth.js';
 import { renderSafeMarkdown, escapeHtml } from '../shared/format.js';
 
-document.addEventListener('DOMContentLoaded', async () => {
+async function initDocumentChat() {
   if (!await requireAuth()) return;
 
   // Initialize Account Menu & Logout Confirmation Dialog
@@ -82,10 +82,10 @@ document.addEventListener('DOMContentLoaded', async () => {
   try {
     currentDoc = await api.getDocument(documentId);
     await setupDocumentViewer(currentDoc);
-  } catch {
+  } catch (err) {
     viewerLoading.style.display = 'none';
     viewerError.style.display = 'flex';
-    viewerErrorMessage.textContent = "We couldn't load this document. Please try again.";
+    viewerErrorMessage.textContent = err?.message || "We couldn't load this document. Please try again.";
     docHeaderTitle.textContent = 'Document Inaccessible';
     return;
   }
@@ -106,11 +106,7 @@ document.addEventListener('DOMContentLoaded', async () => {
     if (isPdf) {
       try {
         const viewUrl = `${api.getDownloadUrl(doc.id)}?inline=true`;
-        const token = localStorage.getItem('rp_auth_token');
-        const resp = await fetch(viewUrl, {
-          headers: token ? { Authorization: `Bearer ${token}` } : {},
-          credentials: 'include',
-        });
+        const resp = await api.fetchAuthenticated(viewUrl);
 
         if (!resp.ok) {
           let errDetail = 'Failed to load PDF document.';
@@ -157,11 +153,56 @@ document.addEventListener('DOMContentLoaded', async () => {
     }
   });
 
+  // Typing Indicator Management
+  let typingIndicatorEl = null;
+  let isSubmitting = false;
+
+  function showTypingIndicator() {
+    hideTypingIndicator();
+
+    const indicator = document.createElement('div');
+    indicator.className = 'chat-message message-assistant typing-indicator-message';
+    indicator.id = 'chat-typing-indicator';
+    indicator.setAttribute('role', 'status');
+    indicator.setAttribute('aria-live', 'polite');
+    indicator.setAttribute('aria-label', 'Assistant is typing');
+
+    indicator.innerHTML = `
+      <div class="message-bubble typing-indicator-bubble">
+        <div class="typing-dots" aria-hidden="true">
+          <span class="typing-dot"></span>
+          <span class="typing-dot"></span>
+          <span class="typing-dot"></span>
+        </div>
+        <span class="sr-only">Assistant is typing...</span>
+      </div>
+    `;
+
+    chatMessages.appendChild(indicator);
+    typingIndicatorEl = indicator;
+    scrollToBottom(true);
+  }
+
+  function hideTypingIndicator() {
+    if (typingIndicatorEl) {
+      typingIndicatorEl.remove();
+      typingIndicatorEl = null;
+    }
+    const existing = document.getElementById('chat-typing-indicator');
+    if (existing) {
+      existing.remove();
+    }
+  }
+
   // 6. Handle Chat Submission with Real-time SSE Streaming
   chatForm.addEventListener('submit', async (e) => {
     e.preventDefault();
+    if (isSubmitting) return;
+
     const question = chatInput.value.trim();
     if (!question) return;
+
+    isSubmitting = true;
 
     // Reset textarea
     chatInput.value = '';
@@ -170,10 +211,13 @@ document.addEventListener('DOMContentLoaded', async () => {
     // Append User Message Bubble
     appendUserMessage(question);
 
-    // Set sending state
+    // Set sending state (disables send button & textarea)
     setChatLoading(true);
 
-    // Prepare Assistant Message Bubble (appended only when first token/content arrives)
+    // Show three-dot typing animation while waiting for response
+    showTypingIndicator();
+
+    // Prepare Assistant Message Bubble (appended when first token/content arrives)
     const { appendToken, setSources, finalize, showError } = createAssistantMessage();
 
     try {
@@ -181,27 +225,37 @@ document.addEventListener('DOMContentLoaded', async () => {
 
       await api.streamChat(documentId, question, {
         onToken: (token) => {
+          // Remove typing indicator as soon as the assistant starts displaying its response
+          hideTypingIndicator();
           fullAnswer += token;
           appendToken(token);
         },
         onSources: (sources) => {
           setSources(sources);
         },
-        onError: () => {
-          setChatLoading(false);
+        onError: (errDetail) => {
+          hideTypingIndicator();
           finalize(fullAnswer);
-          showError("We couldn't generate an answer right now. Please try again.");
+          showError(errDetail || "We couldn't generate an answer right now. Please try again.");
         },
         onDone: () => {
-          finalize(fullAnswer);
-          setChatLoading(false);
-          chatInput.focus();
+          hideTypingIndicator();
+          if (!fullAnswer || !fullAnswer.trim()) {
+            showError("No response was generated for this question. Please try rephrasing.");
+          } else {
+            finalize(fullAnswer);
+          }
         },
       });
 
-    } catch {
+    } catch (err) {
+      hideTypingIndicator();
+      showError(err?.message || "We couldn't generate an answer right now. Please try again.");
+    } finally {
+      // Guaranteed cleanup: prevent duplicate or permanently stuck indicator
+      hideTypingIndicator();
       setChatLoading(false);
-      showError("We couldn't generate an answer right now. Please try again.");
+      isSubmitting = false;
       chatInput.focus();
     }
   });
@@ -342,4 +396,10 @@ document.addEventListener('DOMContentLoaded', async () => {
     sendIcon.style.display = isLoading ? 'none' : 'block';
     sendSpinner.style.display = isLoading ? 'inline-block' : 'none';
   }
-});
+}
+
+if (document.readyState === 'loading') {
+  document.addEventListener('DOMContentLoaded', initDocumentChat);
+} else {
+  initDocumentChat();
+}

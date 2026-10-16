@@ -7,10 +7,33 @@
 import { api, ApiError } from '../shared/api.js';
 import { setToken, setUser, redirectIfAuthenticated } from '../shared/auth.js';
 
-document.addEventListener('DOMContentLoaded', () => {
-  // 1. If user is already authenticated, redirect immediately to feed
+async function initLoginPage() {
+  // 1. If user is already authenticated with a valid token, redirect immediately to feed
   if (redirectIfAuthenticated('feed.html')) {
     return;
+  }
+
+  // Check URL query parameters for notifications
+  const params = new URLSearchParams(window.location.search);
+  const isSessionExpired = Boolean(params.get('session_expired'));
+  const isLoggedOut = Boolean(params.get('logged_out'));
+
+  if (isSessionExpired) {
+    showAlert('Your session has expired. Please sign in again.', 'info');
+  } else if (params.get('registered')) {
+    showAlert('Account created successfully! Please sign in with your credentials.', 'success');
+  } else if (!isLoggedOut) {
+    // If arriving without an explicit logout or expiration, attempt transparent session recovery
+    try {
+      const refreshedToken = await api.refreshToken();
+      if (refreshedToken) {
+        const redirectUrl = params.get('redirect') || 'feed.html';
+        window.location.href = redirectUrl;
+        return;
+      }
+    } catch {
+      // No active session cookie; display login form
+    }
   }
 
   // DOM Elements
@@ -27,14 +50,6 @@ document.addEventListener('DOMContentLoaded', () => {
   const passwordToggleBtn = document.getElementById('password-toggle-btn');
   const eyeIcon = document.getElementById('eye-icon');
   const eyeOffIcon = document.getElementById('eye-off-icon');
-
-  // Check URL query parameters for notifications
-  const params = new URLSearchParams(window.location.search);
-  if (params.get('session_expired')) {
-    showAlert('Your session has expired. Please sign in again.', 'info');
-  } else if (params.get('registered')) {
-    showAlert('Account created successfully! Please sign in with your credentials.', 'success');
-  }
 
   // Toggle Password Visibility
   if (passwordToggleBtn) {
@@ -176,4 +191,10 @@ document.addEventListener('DOMContentLoaded', () => {
       btnSpinner.style.display = 'none';
     }
   }
-});
+}
+
+if (document.readyState === 'loading') {
+  document.addEventListener('DOMContentLoaded', initLoginPage);
+} else {
+  initLoginPage();
+}

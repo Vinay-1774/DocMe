@@ -77,128 +77,203 @@
             </div>
             <span>Research Platform</span>
           </a>
-        </div>
-
-        <div class="auth-header">
-          <h2 class="heading-1">Create an account</h2>
-          <p class="text-subhead">Create an account to start exploring documents.</p>
-        </div>
-
-        <!-- Global Alert Box -->
-        <div id="alert-container" class="alert alert-error" role="alert" style="display: none;">
-          <svg class="alert-icon" viewBox="0 0 20 20" fill="currentColor">
-            <path fill-rule="evenodd" d="M10 18a8 8 0 100-16 8 8 0 000 16zM8.707 7.293a1 1 0 00-1.414 1.414L8.586 10l-1.293 1.293a1 1 0 101.414 1.414L10 11.414l1.293 1.293a1 1 0 001.414-1.414L11.414 10l1.293-1.293a1 1 0 00-1.414-1.414L10 8.586 8.707 7.293z" clip-rule="evenodd"/>
-          </svg>
-          <div id="alert-message" class="alert-content"></div>
-        </div>
-
-        <!-- Registration Form -->
-        <form id="register-form" class="auth-form" novalidate>
-          <!-- Username Input -->
-          <div class="form-group">
-            <label for="username" class="form-label">
-              <span>Username <span class="required-indicator" aria-hidden="true">*</span></span>
-            </label>
-            <div class="input-wrapper has-left-icon">
-              <span class="input-icon-left" aria-hidden="true">
-                <svg width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2">
-                  <path d="M20 21v-2a4 4 0 0 0-4-4H8a4 4 0 0 0-4 4v2"></path>
-                  <circle cx="12" cy="7" r="4"></circle>
-                </svg>
-              </span>
-              <input
-                type="text"
-                id="username"
-                name="username"
-                class="form-input"
-                placeholder="e.g. marie_curie"
-                required
-                autocomplete="username"
-              >
-            </div>
-            <div id="username-error" class="form-error" style="display: none;" role="alert"></div>
+        </div>        <!-- Card Container 1: Registration Form -->
+        <div id="register-card">
+          <div class="auth-header">
+            <h2 class="heading-1">Create an account</h2>
+            <p class="text-subhead">Create an account to start exploring documents.</p>
           </div>
 
-          <!-- Email Input -->
-          <div class="form-group">
-            <label for="email" class="form-label">
-              <span>Email address <span class="required-indicator" aria-hidden="true">*</span></span>
-            </label>
-            <div class="input-wrapper has-left-icon">
-              <span class="input-icon-left" aria-hidden="true">
-                <svg width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2">
-                  <path d="M4 4h16c1.1 0 2 .9 2 2v12c0 1.1-.9 2-2 2H4c-1.1 0-2-.9-2-2V6c0-1.1.9-2 2-2z"></path>
-                  <polyline points="22,6 12,13 2,6"></polyline>
-                </svg>
-              </span>
-              <input
-                type="email"
-                id="email"
-                name="email"
-                class="form-input"
-                placeholder="researcher@university.edu"
-                required
-                autocomplete="email"
-              >
-            </div>
-            <div id="email-error" class="form-error" style="display: none;" role="alert"></div>
+          <!-- Global Alert Box -->
+          <div id="alert-container" class="alert alert-error" role="alert" style="display: none;">
+            <svg class="alert-icon" viewBox="0 0 20 20" fill="currentColor">
+              <path fill-rule="evenodd" d="M10 18a8 8 0 100-16 8 8 0 000 16zM8.707 7.293a1 1 0 00-1.414 1.414L8.586 10l-1.293 1.293a1 1 0 101.414 1.414L10 11.414l1.293 1.293a1 1 0 001.414-1.414L11.414 10l1.293-1.293a1 1 0 00-1.414-1.414L10 8.586 8.707 7.293z" clip-rule="evenodd"/>
+            </svg>
+            <div id="alert-message" class="alert-content"></div>
           </div>
 
-          <!-- Password Input -->
-          <div class="form-group">
-            <label for="password" class="form-label">
-              <span>Password <span class="required-indicator" aria-hidden="true">*</span></span>
-            </label>
-            <div class="input-wrapper has-left-icon has-right-action">
-              <span class="input-icon-left" aria-hidden="true">
-                <svg width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2">
-                  <rect x="3" y="11" width="18" height="11" rx="2" ry="2"></rect>
-                  <path d="M7 11V7a5 5 0 0 1 10 0v4"></path>
-                </svg>
-              </span>
-              <input
-                type="password"
-                id="password"
-                name="password"
-                class="form-input"
-                placeholder="Create a strong password"
-                required
-                autocomplete="new-password"
-              >
-              <button
-                type="button"
-                id="password-toggle-btn"
-                class="input-action-right"
-                aria-label="Toggle password visibility"
-              >
-                <svg id="eye-icon" width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2">
-                  <path d="M1 12s4-8 11-8 11 8 11 8-4 8-11 8-11-8-11-8z"></path>
-                  <circle cx="12" cy="12" r="3"></circle>
-                </svg>
-                <svg id="eye-off-icon" width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" style="display: none;">
-                  <path d="M17.94 17.94A10.07 10.07 0 0 1 12 20c-7 0-11-8-11-8a18.45 18.45 0 0 1 5.06-5.94M9.9 4.24A9.12 9.12 0 0 1 12 4c7 0 11 8 11 8a18.5 18.5 0 0 1-2.16 3.19m-6.72-1.07a3 3 0 1 1-4.24-4.24"></path>
-                  <line x1="1" y1="1" x2="23" y2="23"></line>
-                </svg>
+          <!-- Registration Form -->
+          <form id="register-form" class="auth-form" novalidate>
+            <!-- Username Input -->
+            <div class="form-group">
+              <label for="username" class="form-label">
+                <span>Username <span class="required-indicator" aria-hidden="true">*</span></span>
+              </label>
+              <div class="input-wrapper has-left-icon">
+                <span class="input-icon-left" aria-hidden="true">
+                  <svg width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2">
+                    <path d="M20 21v-2a4 4 0 0 0-4-4H8a4 4 0 0 0-4 4v2"></path>
+                    <circle cx="12" cy="7" r="4"></circle>
+                  </svg>
+                </span>
+                <input
+                  type="text"
+                  id="username"
+                  name="username"
+                  class="form-input"
+                  placeholder="e.g. marie_curie"
+                  required
+                  autocomplete="username"
+                >
+              </div>
+              <div id="username-error" class="form-error" style="display: none;" role="alert"></div>
+            </div>
+
+            <!-- Email Input -->
+            <div class="form-group">
+              <label for="email" class="form-label">
+                <span>Email address <span class="required-indicator" aria-hidden="true">*</span></span>
+              </label>
+              <div class="input-wrapper has-left-icon">
+                <span class="input-icon-left" aria-hidden="true">
+                  <svg width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2">
+                    <path d="M4 4h16c1.1 0 2 .9 2 2v12c0 1.1-.9 2-2 2H4c-1.1 0-2-.9-2-2V6c0-1.1.9-2 2-2z"></path>
+                    <polyline points="22,6 12,13 2,6"></polyline>
+                  </svg>
+                </span>
+                <input
+                  type="email"
+                  id="email"
+                  name="email"
+                  class="form-input"
+                  placeholder="researcher@university.edu"
+                  required
+                  autocomplete="email"
+                >
+              </div>
+              <div id="email-error" class="form-error" style="display: none;" role="alert"></div>
+            </div>
+
+            <!-- Password Input -->
+            <div class="form-group">
+              <label for="password" class="form-label">
+                <span>Password <span class="required-indicator" aria-hidden="true">*</span></span>
+              </label>
+              <div class="input-wrapper has-left-icon has-right-action">
+                <span class="input-icon-left" aria-hidden="true">
+                  <svg width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2">
+                    <rect x="3" y="11" width="18" height="11" rx="2" ry="2"></rect>
+                    <path d="M7 11V7a5 5 0 0 1 10 0v4"></path>
+                  </svg>
+                </span>
+                <input
+                  type="password"
+                  id="password"
+                  name="password"
+                  class="form-input"
+                  placeholder="Create a strong password"
+                  required
+                  autocomplete="new-password"
+                >
+                <button
+                  type="button"
+                  id="password-toggle-btn"
+                  class="input-action-right"
+                  aria-label="Toggle password visibility"
+                >
+                  <svg id="eye-icon" width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2">
+                    <path d="M1 12s4-8 11-8 11 8 11 8-4 8-11 8-11-8-11-8z"></path>
+                    <circle cx="12" cy="12" r="3"></circle>
+                  </svg>
+                  <svg id="eye-off-icon" width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" style="display: none;">
+                    <path d="M17.94 17.94A10.07 10.07 0 0 1 12 20c-7 0-11-8-11-8a18.45 18.45 0 0 1 5.06-5.94M9.9 4.24A9.12 9.12 0 0 1 12 4c7 0 11 8 11 8a18.5 18.5 0 0 1-2.16 3.19m-6.72-1.07a3 3 0 1 1-4.24-4.24"></path>
+                    <line x1="1" y1="1" x2="23" y2="23"></line>
+                  </svg>
+                </button>
+              </div>
+              <div id="password-error" class="form-error" style="display: none;" role="alert"></div>
+            </div>
+
+            <!-- Submit Button -->
+            <div class="form-actions">
+              <button type="submit" id="register-submit-btn" class="btn btn-primary btn-block">
+                <span id="btn-label">Create Account</span>
+                <span id="btn-spinner" class="spinner" style="display: none;" aria-hidden="true"></span>
               </button>
             </div>
-            <div id="password-error" class="form-error" style="display: none;" role="alert"></div>
+          </form>
+
+          <!-- Login Link -->
+          <div class="auth-footer-prompt">
+            <p class="text-subhead">
+              Already have an account?
+              <a href="login.html" class="auth-signup-link">Log in here</a>
+            </p>
+          </div>
+        </div>
+
+        <!-- Card Container 2: OTP Verification Screen -->
+        <div id="otp-card" style="display: none;">
+          <div class="auth-header">
+            <h2 class="heading-1">Verify your email</h2>
+            <p class="text-subhead">
+              Enter the 6-digit code sent to <strong id="otp-target-email" class="otp-email-highlight"></strong>
+            </p>
           </div>
 
-          <!-- Submit Button -->
-          <div class="form-actions">
-            <button type="submit" id="register-submit-btn" class="btn btn-primary btn-block">
-              <span id="btn-label">Create Account</span>
-              <span id="btn-spinner" class="spinner" style="display: none;" aria-hidden="true"></span>
+          <!-- OTP Alert Box -->
+          <div id="otp-alert-container" class="alert alert-error" role="alert" style="display: none;">
+            <svg class="alert-icon" viewBox="0 0 20 20" fill="currentColor">
+              <path fill-rule="evenodd" d="M10 18a8 8 0 100-16 8 8 0 000 16zM8.707 7.293a1 1 0 00-1.414 1.414L8.586 10l-1.293 1.293a1 1 0 101.414 1.414L10 11.414l1.293 1.293a1 1 0 001.414-1.414L11.414 10l1.293-1.293a1 1 0 00-1.414-1.414L10 8.586 8.707 7.293z" clip-rule="evenodd"/>
+            </svg>
+            <div id="otp-alert-message" class="alert-content"></div>
+          </div>
+
+          <!-- OTP Form -->
+          <form id="otp-form" class="auth-form" novalidate>
+            <div class="form-group text-center">
+              <label for="otp-input" class="form-label" style="justify-content: center;">
+                <span>Verification Code</span>
+              </label>
+              <input
+                type="text"
+                id="otp-input"
+                name="otp"
+                class="form-input otp-code-input"
+                maxlength="6"
+                inputmode="numeric"
+                pattern="[0-9]*"
+                placeholder="••••••"
+                autocomplete="one-time-code"
+                required
+              >
+              <div id="otp-input-error" class="form-error" style="display: none; justify-content: center;" role="alert"></div>
+            </div>
+
+            <!-- 30-Second Countdown Timer Badge -->
+            <div class="otp-timer-container">
+              <div class="otp-timer-badge" id="otp-timer-badge">
+                <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.2" stroke-linecap="round" stroke-linejoin="round">
+                  <circle cx="12" cy="12" r="10"></circle>
+                  <polyline points="12 6 12 12 16 14"></polyline>
+                </svg>
+                <span>Code expires in <strong id="otp-countdown">00:30</strong></span>
+              </div>
+            </div>
+
+            <!-- Verify Submit Button -->
+            <div class="form-actions" style="margin-top: 1.25rem;">
+              <button type="submit" id="otp-verify-btn" class="btn btn-primary btn-block">
+                <span id="otp-verify-label">Verify &amp; Continue</span>
+                <span id="otp-verify-spinner" class="spinner" style="display: none;" aria-hidden="true"></span>
+              </button>
+            </div>
+          </form>
+
+          <!-- Resend Option -->
+          <div class="otp-resend-prompt">
+            <p class="text-subhead" style="margin-bottom: 0.35rem;">Didn't receive the code?</p>
+            <button type="button" id="otp-resend-btn" class="btn-link" disabled>
+              <span>Resend Code</span> <span id="resend-countdown-text">(30s)</span>
             </button>
           </div>
-        </form>
 
-        <!-- Login Link -->
-        <div class="auth-footer-prompt">
-          <p class="text-subhead">
-            Already have an account?
-            <a href="login.html" class="auth-signup-link">Log in here</a>
-          </p>
+          <!-- Back to Edit Info -->
+          <div class="otp-back-prompt">
+            <button type="button" id="otp-back-btn" class="btn-link text-subhead">
+              ← Edit email or account info
+            </button>
+          </div>
         </div>
       </div>
     </main>

@@ -16,7 +16,9 @@ if str(BASE_DIR) not in sys.path:
     sys.path.insert(0, str(BASE_DIR))
 
 from backend.app import config
+config.REQUIRE_EMAIL_VERIFICATION = False
 TEST_DB_NAME = "research_platform_test"
+
 
 test_db_url = URL.create(
     drivername="postgresql+psycopg",
@@ -1303,6 +1305,89 @@ def test_persistent_login_refresh_and_logout(client):
     client.cookies.set("rp_refresh_token", "invalid.jwt.token")
     invalid_refresh = client.post("/refresh")
     assert invalid_refresh.status_code == 401
+
+
+def test_expired_access_token_recovery_via_refresh(client):
+    """
+    Verifies that when an access token expires:
+    - Calling protected /me returns 401.
+    - Calling /refresh with HttpOnly cookie generates a new valid access token.
+    - Calling /me with new access token succeeds.
+    """
+    from datetime import timedelta
+    from backend.app.auth import create_access_token
+
+    client.post(
+        "/register",
+        json={"username": "jack_session", "email": "jack@example.com", "password": "password123"},
+    )
+    login_res = client.post(
+        "/login",
+        json={"email": "jack@example.com", "password": "password123"},
+    )
+    assert login_res.status_code == 200
+    user_id = client.get("/me", headers={"Authorization": f"Bearer {login_res.json()['access_token']}"}).json()["id"]
+
+    # Create an expired access token
+    expired_access_token = create_access_token(subject=user_id, expires_delta=timedelta(seconds=-10))
+
+    # Request with expired token fails with 401
+    me_expired = client.get("/me", headers={"Authorization": f"Bearer {expired_access_token}"})
+    assert me_expired.status_code == 401
+
+    # Call /refresh with the session cookie retained in client
+    refresh_res = client.post("/refresh")
+    assert refresh_res.status_code == 200
+    new_access_token = refresh_res.json()["access_token"]
+
+    # New token immediately allows access
+    me_recovered = client.get("/me", headers={"Authorization": f"Bearer {new_access_token}"})
+    assert me_recovered.status_code == 200
+    assert me_recovered.json()["username"] == "jack_session"
+
+
+def test_expired_refresh_token_revocation(client):
+    """
+    Verifies that an expired refresh token:
+    - Returns 401 on /refresh.
+    - Wipes out the session cookie via Set-Cookie Max-Age=0.
+    """
+    from datetime import timedelta
+    from backend.app.auth import create_refresh_token
+
+    expired_refresh_token = create_refresh_token(subject=999, expires_delta=timedelta(days=-1))
+    client.cookies.set("rp_refresh_token", expired_refresh_token)
+
+    res = client.post("/refresh")
+    assert res.status_code == 401
+    assert "Invalid or expired refresh token" in res.json()["detail"]
+    set_cookie = res.headers.get("set-cookie", "")
+    assert "rp_refresh_token=" in set_cookie
+    assert "Max-Age=0" in set_cookie or "expires=" in set_cookie.lower()
+
+
+def test_logout_prevents_subsequent_refresh(client):
+    """
+    Verifies that explicit logout clears the cookie so subsequent refresh attempts fail.
+    """
+    client.post(
+        "/register",
+        json={"username": "karen_logout", "email": "karen@example.com", "password": "password123"},
+    )
+    login_res = client.post(
+        "/login",
+        json={"email": "karen@example.com", "password": "password123"},
+    )
+    assert login_res.status_code == 200
+
+    # Explicit logout
+    logout_res = client.post("/logout")
+    assert logout_res.status_code == 200
+
+    # Attempting to refresh without cookie returns 401
+    client.cookies.clear()
+    refresh_after_logout = client.post("/refresh")
+    assert refresh_after_logout.status_code == 401
 
 
 def test_contributor_profile_and_visibility_rules(client):

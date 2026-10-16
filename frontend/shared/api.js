@@ -4,15 +4,61 @@
  * Provides unified request configuration, token injection, and structured error handling.
  */
 
-import { getToken, setToken, clearAuth } from './auth.js';
+import { getToken, setToken, clearAuth, isTokenExpired } from './auth.js';
+
+/**
+ * Computes the default API base URL, aligning hostname with window.location
+ * to prevent cross-site cookie isolation between localhost and 127.0.0.1.
+ */
+export function getDefaultApiBaseUrl() {
+  if (typeof window !== 'undefined') {
+    if (window.DOCME_API_URL) return window.DOCME_API_URL.replace(/\/+$/, '');
+    if (window.RESEARCH_API_URL) return window.RESEARCH_API_URL.replace(/\/+$/, '');
+    try {
+      const meta =
+        document.querySelector('meta[name="docme-api-url"]') ||
+        document.querySelector('meta[name="research-api-url"]');
+      if (meta && meta.content) return meta.content.trim().replace(/\/+$/, '');
+    } catch {
+      // DOM access restricted
+    }
+    try {
+      const stored =
+        localStorage.getItem('DOCME_API_URL') ||
+        localStorage.getItem('RESEARCH_API_URL');
+      if (stored) return stored.trim().replace(/\/+$/, '');
+    } catch {
+      // Storage restricted
+    }
+    if (window.location && window.location.hostname) {
+      const proto = window.location.protocol || 'http:';
+      const host = window.location.hostname;
+      if (window.location.port === '8000') {
+        return window.location.origin;
+      }
+      if (host === 'localhost' || host === '127.0.0.1') {
+        return `${proto}//${host}:8000`;
+      }
+    }
+  }
+  return 'http://127.0.0.1:8000';
+}
 
 // Backend runs on port 8000 by default; allow override via window or localStorage
-export const API_BASE_URL =
-  window.DOCME_API_URL ||
-  window.RESEARCH_API_URL ||
-  localStorage.getItem('DOCME_API_URL') ||
-  localStorage.getItem('RESEARCH_API_URL') ||
-  'http://127.0.0.1:8000';
+export const API_BASE_URL = getDefaultApiBaseUrl();
+
+/**
+ * Redirects the user to the login page with return URL on genuine session expiration.
+ */
+function redirectToLogin() {
+  if (typeof window === 'undefined') return;
+  const currentPath = window.location.pathname;
+  if (!currentPath.includes('login.html') && !currentPath.includes('register.html')) {
+    const fullPath = currentPath + window.location.search;
+    const prefix = currentPath.includes('/pages/') ? '' : 'pages/';
+    window.location.href = `${prefix}login.html?session_expired=1&redirect=${encodeURIComponent(fullPath)}`;
+  }
+}
 
 /**
  * Custom error class capturing HTTP status code, API detail, and raw response.
@@ -37,20 +83,44 @@ async function requestTokenRefresh() {
     refreshPromise = (async () => {
       try {
         const refreshUrl = `${API_BASE_URL}/refresh`;
-        const res = await fetch(refreshUrl, {
-          method: 'POST',
-          credentials: 'include',
-          headers: { Accept: 'application/json' },
-        });
-        if (!res.ok) {
-          throw new Error('Refresh rejected');
+        let res;
+        try {
+          res = await fetch(refreshUrl, {
+            method: 'POST',
+            credentials: 'include',
+            headers: {
+              Accept: 'application/json',
+            },
+          });
+        } catch (netErr) {
+          throw new ApiError(
+            'Unable to connect to the authentication server for session renewal.',
+            0,
+            netErr.message
+          );
         }
+
+        if (!res.ok) {
+          let errorDetail = null;
+          try {
+            const errData = await res.json();
+            errorDetail = errData?.detail;
+          } catch {
+            // Non-JSON response
+          }
+          throw new ApiError(
+            errorDetail || 'Session refresh rejected',
+            res.status,
+            errorDetail
+          );
+        }
+
         const data = await res.json();
         if (data && data.access_token) {
           setToken(data.access_token);
           return data.access_token;
         }
-        throw new Error('No access token in refresh response');
+        throw new ApiError('No access token in refresh response', res.status);
       } finally {
         refreshPromise = null;
       }
@@ -99,9 +169,11 @@ function parseErrorMessage(data, status) {
 
 /**
  * Core HTTP client function for all API communications.
+ * Handles automatic access-token injection, transparent single-retry on 401,
+ * and concurrent request deduplication.
  *
  * @param {string} endpoint - Relative path (e.g. '/login', '/me')
- * @param {object} options - Fetch options (method, headers, body, authRequired)
+ * @param {object} options - Fetch options (method, headers, body, authRequired, _isRetry)
  * @returns {Promise<any>}
  */
 export async function apiRequest(endpoint, options = {}) {
@@ -110,18 +182,39 @@ export async function apiRequest(endpoint, options = {}) {
     headers = {},
     body = null,
     authRequired = true,
+    _isRetry = false,
     ...restOptions
   } = options;
 
   const url = `${API_BASE_URL}${endpoint.startsWith('/') ? endpoint : `/${endpoint}`}`;
+
+  const isAuthAuthEndpoint =
+    endpoint.includes('/login') ||
+    endpoint.includes('/token') ||
+    endpoint.includes('/refresh') ||
+    endpoint.includes('/logout');
+
+  let token = getToken();
+
+  // If authenticated request and token is expired/near-expiry, proactively refresh before sending
+  if (authRequired && !_isRetry && !isAuthAuthEndpoint && token && isTokenExpired(token, 10)) {
+    try {
+      token = await requestTokenRefresh();
+    } catch (refreshErr) {
+      if (refreshErr.status === 401 || refreshErr.status === 403) {
+        clearAuth();
+        redirectToLogin();
+        throw refreshErr;
+      }
+      // On network/5xx error, continue with existing token
+    }
+  }
 
   const requestHeaders = {
     Accept: 'application/json',
     ...headers,
   };
 
-  // Attach JWT Bearer token whenever available in storage
-  let token = getToken();
   if (token) {
     requestHeaders['Authorization'] = `Bearer ${token}`;
   }
@@ -151,27 +244,23 @@ export async function apiRequest(endpoint, options = {}) {
   }
 
   // Handle 401 Unauthorized for authenticated endpoints:
-  // Transparently attempt to refresh the session without unwanted user logout
-  const isAuthAuthEndpoint = endpoint.includes('/login') || endpoint.includes('/token') || endpoint.includes('/refresh') || endpoint.includes('/logout');
-  if (response.status === 401 && authRequired && !isAuthAuthEndpoint) {
+  // Transparently attempt to refresh the session and retry the original request only ONCE
+  if (response.status === 401 && authRequired && !_isRetry && !isAuthAuthEndpoint) {
     try {
       const newToken = await requestTokenRefresh();
       if (newToken) {
-        requestHeaders['Authorization'] = `Bearer ${newToken}`;
-        response = await fetch(url, {
-          method,
-          headers: requestHeaders,
-          body: finalBody,
-          credentials: 'include',
-          ...restOptions,
+        return await apiRequest(endpoint, {
+          ...options,
+          _isRetry: true,
         });
       }
-    } catch {
-      // Refresh failed; session has genuinely expired
-      clearAuth();
-      if (!window.location.pathname.includes('login.html')) {
-        window.location.href = '/pages/login.html?session_expired=1';
+    } catch (refreshErr) {
+      // ONLY clear auth and redirect if refresh token is genuinely invalid, revoked, or expired (401/403)
+      if (refreshErr.status === 401 || refreshErr.status === 403) {
+        clearAuth();
+        redirectToLogin();
       }
+      throw refreshErr;
     }
   }
 
@@ -201,6 +290,75 @@ export async function apiRequest(endpoint, options = {}) {
 }
 
 /**
+ * Authenticated fetch helper for binary streams, file downloads, and custom responses.
+ * Performs transparent token refresh and single retry on 401.
+ */
+export async function apiFetch(url, options = {}) {
+  const {
+    method = 'GET',
+    headers = {},
+    authRequired = true,
+    _isRetry = false,
+    ...restOptions
+  } = options;
+
+  let token = getToken();
+
+  if (authRequired && !_isRetry && token && isTokenExpired(token, 10)) {
+    try {
+      token = await requestTokenRefresh();
+    } catch (refreshErr) {
+      if (refreshErr.status === 401 || refreshErr.status === 403) {
+        clearAuth();
+        redirectToLogin();
+        throw refreshErr;
+      }
+    }
+  }
+
+  const requestHeaders = { ...headers };
+  if (token) {
+    requestHeaders['Authorization'] = `Bearer ${token}`;
+  }
+
+  let response;
+  try {
+    response = await fetch(url, {
+      method,
+      headers: requestHeaders,
+      credentials: 'include',
+      ...restOptions,
+    });
+  } catch (netErr) {
+    throw new ApiError(
+      'Unable to connect to the server. Please check your connection and try again.',
+      0,
+      netErr.message
+    );
+  }
+
+  if (response.status === 401 && authRequired && !_isRetry) {
+    try {
+      const newToken = await requestTokenRefresh();
+      if (newToken) {
+        return await apiFetch(url, {
+          ...options,
+          _isRetry: true,
+        });
+      }
+    } catch (refreshErr) {
+      if (refreshErr.status === 401 || refreshErr.status === 403) {
+        clearAuth();
+        redirectToLogin();
+      }
+      throw refreshErr;
+    }
+  }
+
+  return response;
+}
+
+/**
  * Full Research Platform API Client
  */
 export const api = {
@@ -213,15 +371,36 @@ export const api = {
     });
   },
 
-  async register(username, email, password) {
+  async register(username, email, password, otp = null) {
+    const payload = { username, email, password };
+    if (otp) {
+      payload.otp = otp;
+    }
     return apiRequest('/register', {
       method: 'POST',
-      body: { username, email, password },
+      body: payload,
+      authRequired: false,
+    });
+  },
+
+  async requestOtp(email, purpose = 'registration') {
+    return apiRequest('/auth/otp/request', {
+      method: 'POST',
+      body: { email, purpose },
+      authRequired: false,
+    });
+  },
+
+  async verifyOtp(email, otp, purpose = 'registration') {
+    return apiRequest('/auth/otp/verify', {
+      method: 'POST',
+      body: { email, otp, purpose },
       authRequired: false,
     });
   },
 
   async getMe() {
+
     return apiRequest('/me', {
       method: 'GET',
       authRequired: true,
@@ -331,6 +510,10 @@ export const api = {
     });
   },
 
+  async fetchAuthenticated(url, options = {}) {
+    return apiFetch(url, options);
+  },
+
   getDownloadUrl(documentId) {
     return `${API_BASE_URL}/documents/${documentId}/download`;
   },
@@ -343,27 +526,13 @@ export const api = {
    */
   async downloadDocument(documentId) {
     const url = `${API_BASE_URL}/documents/${documentId}/download`;
-    const token = getToken();
-    const headers = {
-      Accept: 'application/octet-stream, application/pdf, application/vnd.openxmlformats-officedocument.wordprocessingml.document, */*',
-    };
-    if (token) {
-      headers['Authorization'] = `Bearer ${token}`;
-    }
-
-    let response;
-    try {
-      response = await fetch(url, {
-        method: 'GET',
-        headers,
-      });
-    } catch (networkError) {
-      throw new ApiError(
-        'Unable to connect to the backend server to download the document.',
-        0,
-        networkError.message
-      );
-    }
+    const response = await apiFetch(url, {
+      method: 'GET',
+      headers: {
+        Accept: 'application/octet-stream, application/pdf, application/vnd.openxmlformats-officedocument.wordprocessingml.document, */*',
+      },
+      authRequired: true,
+    });
 
     if (!response.ok) {
       let errorDetail = null;
@@ -430,9 +599,23 @@ export const api = {
   /**
    * Real Token Streaming via Server-Sent Events (SSE)
    * Consumes POST /documents/{id}/chat?stream=true with Bearer auth.
+   * Seamlessly handles token refresh and single retry on 401.
    */
-  async streamChat(documentId, question, { onToken, onSources, onError, onDone }) {
-    const token = getToken();
+  async streamChat(documentId, question, { onToken, onSources, onError, onDone }, _isRetry = false) {
+    let token = getToken();
+    if (token && !_isRetry && isTokenExpired(token, 10)) {
+      try {
+        token = await requestTokenRefresh();
+      } catch (refreshErr) {
+        if (refreshErr.status === 401 || refreshErr.status === 403) {
+          clearAuth();
+          redirectToLogin();
+          if (onError) onError('Your session has expired. Please log in again.');
+          return;
+        }
+      }
+    }
+
     const url = `${API_BASE_URL}/documents/${documentId}/chat?stream=true`;
 
     try {
@@ -443,8 +626,30 @@ export const api = {
           Accept: 'text/event-stream',
           ...(token ? { Authorization: `Bearer ${token}` } : {}),
         },
+        credentials: 'include',
         body: JSON.stringify({ question, stream: true }),
       });
+
+      if (response.status === 401 && !_isRetry) {
+        try {
+          const refreshedToken = await requestTokenRefresh();
+          if (refreshedToken) {
+            return this.streamChat(
+              documentId,
+              question,
+              { onToken, onSources, onError, onDone },
+              true
+            );
+          }
+        } catch (refreshErr) {
+          if (refreshErr.status === 401 || refreshErr.status === 403) {
+            clearAuth();
+            redirectToLogin();
+            if (onError) onError('Your session has expired. Please log in again.');
+            return;
+          }
+        }
+      }
 
       if (!response.ok) {
         let errData = null;

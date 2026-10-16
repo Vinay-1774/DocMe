@@ -3,7 +3,7 @@ from typing import Generator
 from sqlalchemy import create_engine, text
 from sqlalchemy.orm import DeclarativeBase, Session, sessionmaker
 
-from backend.app.config import DATABASE_URL, DB_MAX_OVERFLOW, DB_POOL_RECYCLE, DB_POOL_SIZE
+from .config import DATABASE_URL, DB_MAX_OVERFLOW, DB_POOL_RECYCLE, DB_POOL_SIZE
 
 logger = logging.getLogger(__name__)
 
@@ -46,7 +46,7 @@ def init_db() -> None:
     Safe to run repeatedly; does not destroy existing data.
     """
     # Import all models so that Base.metadata is fully populated
-    from backend.app import models  # noqa: F401
+    from . import models  # noqa: F401
 
     with engine.connect() as conn:
         try:
@@ -56,6 +56,15 @@ def init_db() -> None:
             logger.warning("CREATE EXTENSION IF NOT EXISTS vector skipped or non-fatal: %s", e)
 
     Base.metadata.create_all(bind=engine)
+
+    # Ensure is_verified exists on existing users table without requiring Alembic
+    with engine.connect() as conn:
+        try:
+            conn.execute(text("ALTER TABLE users ADD COLUMN IF NOT EXISTS is_verified BOOLEAN DEFAULT TRUE;"))
+            conn.commit()
+        except Exception as e:
+            logger.warning("ALTER TABLE users ADD COLUMN is_verified non-fatal: %s", e)
+
 
 
 if __name__ == "__main__":

@@ -9,10 +9,10 @@ from sqlalchemy.orm import Session
 logger = logging.getLogger(__name__)
 
 # Import database models
-from backend.app.models import Document, DocumentChunk
+from .models import Document, DocumentChunk
 
 # Reuse existing shared embedding generation from ingestion.py
-from backend.app.ingestion import generate_embedding
+from .ingestion import generate_embedding
 
 
 def perform_semantic_search(

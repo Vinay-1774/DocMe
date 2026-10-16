@@ -14,7 +14,7 @@ import {
   renderAvatarHtml,
 } from '../shared/auth.js';
 
-document.addEventListener('DOMContentLoaded', async () => {
+async function initProfilePage() {
   if (!await requireAuth()) return;
 
   // Initialize Account Menu & Logout Confirmation
@@ -329,4 +329,10 @@ document.addEventListener('DOMContentLoaded', async () => {
       .replace(/"/g, '&quot;')
       .replace(/'/g, '&#039;');
   }
-});
+}
+
+if (document.readyState === 'loading') {
+  document.addEventListener('DOMContentLoaded', initProfilePage);
+} else {
+  initProfilePage();
+}

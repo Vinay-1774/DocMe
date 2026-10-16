@@ -14,7 +14,7 @@ from sqlalchemy.orm import Session
 logger = logging.getLogger(__name__)
 
 # Centralized configuration
-from backend.app.config import (
+from .config import (
     COOKIE_SAMESITE,
     COOKIE_SECURE,
     CORS_ORIGINS,
@@ -25,9 +25,9 @@ from backend.app.config import (
 )
 
 # Database dependency and models
-from backend.app.database import get_db
-from backend.app.models import Comment, Document, DocumentChunk, User
-from backend.app.schema import (
+from .database import get_db
+from .models import Comment, Document, DocumentChunk, User
+from .schema import (
     ChatRequest,
     ChatResponse,
     ChatSource,
@@ -41,9 +41,11 @@ from backend.app.schema import (
     UserLogin,
     UserRankingResponse,
     UserResponse,
+    OTPRequest,
+    OTPVerifyRequest,
+    OTPResponse,
 )
-from backend.app.auth import (
-    authenticate_user_by_email,
+from .auth import (
     create_access_token,
     create_refresh_token,
     get_current_user,
@@ -53,12 +55,20 @@ from backend.app.auth import (
     register_user,
     verify_refresh_token,
 )
-from backend.app.ingestion import compute_file_hash, generate_embedding, ingest_document, SUPPORTED_EXTENSIONS
-from backend.app.retrieval import retrieve_documents
-from backend.app.chat import stream_response
-from backend.app.workflow import qa_workflow
-# Direct import of semantic search module
-from backend.app.semantic_search import perform_semantic_search
+from .otp import (
+    cancel_otp_challenge,
+    create_otp_challenge,
+    verify_otp,
+    OTPCooldownError,
+    OTPRateLimitError,
+)
+from .email import send_otp_email, EmailDeliveryError
+from .ingestion import compute_file_hash, ingest_document, SUPPORTED_EXTENSIONS
+from .retrieval import retrieve_documents
+from .chat import stream_response
+from .workflow import qa_workflow
+
+from .semantic_search import generate_embedding, perform_semantic_search
 
 
 # Initialize FastAPI application
@@ -72,6 +82,7 @@ app = FastAPI(
 app.add_middleware(
     CORSMiddleware,
     allow_origins=CORS_ORIGINS,
+    allow_origin_regex=r"^https?://(localhost|127\.0\.0\.1)(:[0-9]+)?$",
     allow_credentials=True,
     allow_methods=["*"],
     allow_headers=["*"],
@@ -96,6 +107,112 @@ def root():
 def register(user_data: UserCreate, db: Session = Depends(get_db)):
     """Registers a new user."""
     return register_user(user_data, db)
+
+
+@app.post("/auth/otp/request", response_model=OTPResponse)
+def request_otp(
+    payload: OTPRequest,
+    db: Session = Depends(get_db),
+):
+    """
+    Requests a single-use 6-digit email OTP for registration or verification.
+    Enforces resend cooldown (30s) and hourly limits in PostgreSQL.
+    Never reveals whether the email is registered or not (prevents enumeration).
+    """
+    clean_email = payload.email.strip().lower()
+    existing_user = db.scalar(select(User).where(User.email == clean_email))
+
+    # For registration, if user already exists and is verified, do not reveal user existence
+    if payload.purpose == "registration" and existing_user and existing_user.is_verified:
+        return OTPResponse(
+            status="success",
+            message="If this email is eligible, a verification code has been sent.",
+        )
+
+    user_id = existing_user.id if existing_user else None
+
+    try:
+        challenge, plaintext_otp = create_otp_challenge(
+            db=db,
+            email=clean_email,
+            purpose=payload.purpose,
+            user_id=user_id,
+        )
+    except OTPCooldownError as e:
+        raise HTTPException(
+            status_code=status.HTTP_429_TOO_MANY_REQUESTS,
+            detail=str(e),
+            headers={"Retry-After": str(e.retry_after_seconds)},
+        )
+    except OTPRateLimitError as e:
+        raise HTTPException(
+            status_code=status.HTTP_429_TOO_MANY_REQUESTS,
+            detail=str(e),
+        )
+
+    try:
+        send_otp_email(to_email=clean_email, otp=plaintext_otp, purpose=payload.purpose)
+    except EmailDeliveryError:
+        cancel_otp_challenge(db, challenge)
+        raise HTTPException(
+            status_code=status.HTTP_503_SERVICE_UNAVAILABLE,
+            detail="Unable to deliver verification email at this time. Please check mail configuration.",
+        )
+
+    return OTPResponse(
+        status="success",
+        message="If this email is eligible, a verification code has been sent.",
+    )
+
+
+@app.post("/auth/otp/verify", response_model=OTPResponse)
+def verify_otp_endpoint(
+    payload: OTPVerifyRequest,
+    db: Session = Depends(get_db),
+):
+    """
+    Verifies a 6-digit email OTP code against active challenges.
+    Enforces server-side 30-second expiry, max 5 attempts, and atomic single-use consumption.
+    """
+    result = verify_otp(
+        db=db,
+        email=payload.email,
+        otp=payload.otp,
+        purpose=payload.purpose,
+    )
+    if not result.success:
+        raise HTTPException(
+            status_code=status.HTTP_400_BAD_REQUEST,
+            detail=result.message,
+        )
+
+    # Mark user as verified in DB for registration and email_verification purposes
+    if payload.purpose in ("email_verification", "registration"):
+        clean_email = payload.email.strip().lower()
+        user = db.scalar(select(User).where(User.email == clean_email))
+        if user:
+            user.is_verified = True
+            db.commit()
+
+    return OTPResponse(
+        status="success",
+        message=result.message,
+    )
+
+
+
+
+def _clear_refresh_cookie_headers() -> dict[str, str]:
+    """Generates headers dictionary to wipe out the refresh token cookie, safe for HTTPException."""
+    temp_resp = Response()
+    temp_resp.delete_cookie(
+        key="rp_refresh_token",
+        path="/",
+        secure=COOKIE_SECURE,
+        samesite=COOKIE_SAMESITE,
+    )
+    cookie_val = temp_resp.headers.get("set-cookie")
+    return {"Set-Cookie": cookie_val} if cookie_val else {}
 
 
 def _set_refresh_cookie(response: Response, user_id: int) -> str:
@@ -164,37 +281,30 @@ def refresh_session(
         # Fallback to custom header if client or test passes it explicitly
         token = request.headers.get("X-Refresh-Token")
 
+    clear_cookie_headers = _clear_refresh_cookie_headers()
+
     if not token:
         raise HTTPException(
             status_code=status.HTTP_401_UNAUTHORIZED,
             detail="Refresh token missing. Please log in again.",
+            headers=clear_cookie_headers,
         )
 
     try:
         user_id = verify_refresh_token(token)
     except Exception:
-        response.delete_cookie(
-            key="rp_refresh_token",
-            path="/",
-            secure=COOKIE_SECURE,
-            samesite=COOKIE_SAMESITE,
-        )
         raise HTTPException(
             status_code=status.HTTP_401_UNAUTHORIZED,
             detail="Invalid or expired refresh token. Please log in again.",
+            headers=clear_cookie_headers,
         )
 
     user = db.scalar(select(User).where(User.id == user_id))
     if not user:
-        response.delete_cookie(
-            key="rp_refresh_token",
-            path="/",
-            secure=COOKIE_SECURE,
-            samesite=COOKIE_SAMESITE,
-        )
         raise HTTPException(
             status_code=status.HTTP_401_UNAUTHORIZED,
             detail="User account associated with this session no longer exists.",
+            headers=clear_cookie_headers,
         )
 
     new_access_token = create_access_token(subject=user.id)
@@ -782,12 +892,8 @@ def document_chat(
 
 
 if __name__ == "__main__":
-    import sys
-    from pathlib import Path
-    project_root = Path(__file__).resolve().parent.parent.parent
-    if str(project_root) not in sys.path:
-        sys.path.insert(0, str(project_root))
     import uvicorn
+
     port = int(os.getenv("PORT", "8000"))
     uvicorn.run("backend.app.main:app", host="0.0.0.0", port=port, reload=True)
 

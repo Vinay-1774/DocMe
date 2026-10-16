@@ -20,16 +20,85 @@ export function getToken() {
   }
 }
 
+let refreshTimer = null;
+
 /**
- * Persists the JWT access token in localStorage.
+ * Parses the base64-encoded payload from a JWT token without external dependencies.
+ * @param {string} token
+ * @returns {object|null}
+ */
+export function parseJwtPayload(token) {
+  if (!token || typeof token !== 'string') return null;
+  const parts = token.split('.');
+  if (parts.length !== 3) return null;
+  try {
+    const base64 = parts[1].replace(/-/g, '+').replace(/_/g, '/');
+    const jsonStr = decodeURIComponent(
+      atob(base64)
+        .split('')
+        .map((c) => '%' + ('00' + c.charCodeAt(0).toString(16)).slice(-2))
+        .join('')
+    );
+    return JSON.parse(jsonStr);
+  } catch {
+    return null;
+  }
+}
+
+/**
+ * Checks whether a JWT token is expired or within the specified buffer window.
+ * @param {string} token - Raw JWT string
+ * @param {number} bufferSeconds - Buffer before expiration to treat as expired (default 60s)
+ * @returns {boolean} True if expired or missing, false if valid
+ */
+export function isTokenExpired(token, bufferSeconds = 60) {
+  const payload = parseJwtPayload(token);
+  if (!payload || !payload.exp) return true;
+  const currentTime = Math.floor(Date.now() / 1000);
+  return payload.exp <= (currentTime + bufferSeconds);
+}
+
+/**
+ * Schedules a background proactive access token refresh before it expires.
+ * @param {string} token
+ */
+export function scheduleTokenRefresh(token) {
+  if (refreshTimer) {
+    clearTimeout(refreshTimer);
+    refreshTimer = null;
+  }
+  const payload = parseJwtPayload(token);
+  if (!payload || !payload.exp) return;
+
+  const expiresInMs = (payload.exp * 1000) - Date.now();
+  // Attempt refresh 2 minutes (120s) before expiry, or after half the remaining lifetime
+  const refreshInMs = Math.max(10000, Math.min(expiresInMs - 120000, expiresInMs / 2));
+
+  refreshTimer = setTimeout(async () => {
+    try {
+      const { api } = await import('./api.js');
+      await api.refreshToken();
+    } catch (err) {
+      console.warn('Proactive background token refresh failed:', err);
+    }
+  }, refreshInMs);
+}
+
+/**
+ * Persists the JWT access token in localStorage and schedules background renewal.
  * @param {string} token
  */
 export function setToken(token) {
   try {
     if (token) {
       localStorage.setItem(TOKEN_KEY, token);
+      scheduleTokenRefresh(token);
     } else {
       localStorage.removeItem(TOKEN_KEY);
+      if (refreshTimer) {
+        clearTimeout(refreshTimer);
+        refreshTimer = null;
+      }
     }
   } catch (err) {
     console.error('Failed to save auth token to storage:', err);
@@ -73,43 +142,70 @@ export function clearAuth() {
   try {
     localStorage.removeItem(TOKEN_KEY);
     localStorage.removeItem(USER_KEY);
+    if (refreshTimer) {
+      clearTimeout(refreshTimer);
+      refreshTimer = null;
+    }
   } catch (err) {
     console.error('Failed to clear auth from storage:', err);
   }
 }
 
 /**
- * Checks whether an active authentication token exists.
+ * Checks whether an active and unexpired authentication token exists.
  * @returns {boolean}
  */
 export function isAuthenticated() {
   const token = getToken();
-  return Boolean(token && token.trim().length > 0);
+  return Boolean(token && !isTokenExpired(token, 0));
 }
 
 /**
- * Guard for protected pages: redirects unauthenticated users to the login page.
- * If access token is absent or expired, attempts transparent background session refresh
- * from the HttpOnly persistent session cookie before redirecting.
+ * Guard for protected pages: keeps users logged in across navigation and page reloads.
+ * If the current access token is absent or expired, attempts transparent background session
+ * refresh using the HttpOnly refresh-token cookie before determining if redirect is needed.
  * Preserves the current page URL for post-login redirect.
+ * @returns {Promise<boolean>}
  */
 export async function requireAuth() {
-  if (!isAuthenticated()) {
-    try {
-      const { api } = await import('./api.js');
-      const refreshed = await api.refreshToken();
-      if (refreshed) {
-        return true;
-      }
-    } catch {
-      // Session has genuinely expired or no refresh cookie
-    }
-    const currentPath = window.location.pathname + window.location.search;
-    const loginUrl = getRelativePathTo('login.html');
-    window.location.href = `${loginUrl}?redirect=${encodeURIComponent(currentPath)}`;
-    return false;
+  const token = getToken();
+
+  // If token is present and still valid for at least 15 seconds, proceed immediately
+  if (token && !isTokenExpired(token, 15)) {
+    // Schedule background renewal if not already active
+    scheduleTokenRefresh(token);
+    return true;
   }
-  return true;
+
+  // Token is either absent or expired/near-expiry: attempt transparent refresh
+  try {
+    const { api } = await import('./api.js');
+    const refreshedToken = await api.refreshToken();
+    if (refreshedToken) {
+      return true;
+    }
+  } catch (err) {
+    // Check if failure was due to invalid/expired refresh token (HTTP 401/403)
+    const isAuthFailure = err?.status === 401 || err?.status === 403;
+    if (isAuthFailure || !token) {
+      clearAuth();
+      const currentPath = window.location.pathname + window.location.search;
+      const loginUrl = getRelativePathTo('login.html');
+      window.location.href = `${loginUrl}?redirect=${encodeURIComponent(currentPath)}`;
+      return false;
+    }
+    // If it's a temporary network hiccup and the access token hasn't fully expired yet, allow through
+    if (token && !isTokenExpired(token, 0)) {
+      return true;
+    }
+  }
+
+  // Cannot establish an active session; redirect to login
+  clearAuth();
+  const currentPath = window.location.pathname + window.location.search;
+  const loginUrl = getRelativePathTo('login.html');
+  window.location.href = `${loginUrl}?redirect=${encodeURIComponent(currentPath)}`;
+  return false;
 }
 
 /**
@@ -404,10 +500,17 @@ export function setupUserMenuAndLogout() {
     }
   });
 
-  window.addEventListener('pageshow', (e) => {
-    if (e.persisted && !isAuthenticated()) {
-      if (!window.location.pathname.includes('login.html') && !window.location.pathname.includes('register.html')) {
-        window.location.href = getRelativePathTo('login.html');
+  // Visibility change listener to refresh tokens proactively when tab is resumed
+  document.addEventListener('visibilitychange', async () => {
+    if (!document.hidden) {
+      const tok = getToken();
+      if (tok && isTokenExpired(tok, 120)) {
+        try {
+          const { api } = await import('./api.js');
+          await api.refreshToken();
+        } catch {
+          // Handled gracefully on next user action
+        }
       }
     }
   });
@@ -423,3 +526,10 @@ function getRelativePathTo(pageName) {
   }
   return `pages/${pageName}`;
 }
+
+// Automatically initialize proactive renewal if an active token is already present
+const initialToken = getToken();
+if (initialToken && !isTokenExpired(initialToken, 0)) {
+  scheduleTokenRefresh(initialToken);
+}
+

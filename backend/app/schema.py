@@ -10,12 +10,14 @@ class UserCreate(BaseModel):
     username: str
     email: EmailStr
     password: str
+    otp: Optional[str] = None
 
 
 class UserResponse(BaseModel):
     id: int
     username: str
     email: EmailStr
+    is_verified: bool = True
     created_at: datetime
 
     model_config = ConfigDict(from_attributes=True)
@@ -29,6 +31,25 @@ class UserLogin(BaseModel):
 class TokenResponse(BaseModel):
     access_token: str
     token_type: str = "bearer"
+
+
+# --- OTP Schemas ---
+
+class OTPRequest(BaseModel):
+    email: EmailStr
+    purpose: str = "registration"
+
+
+class OTPVerifyRequest(BaseModel):
+    email: EmailStr
+    otp: str
+    purpose: str = "registration"
+
+
+class OTPResponse(BaseModel):
+    status: str
+    message: str
+
 
 
 # --- Document Schemas ---

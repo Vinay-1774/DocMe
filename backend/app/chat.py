@@ -6,7 +6,7 @@ from typing import Any, Generator, List, Optional
 logger = logging.getLogger(__name__)
 
 # Import centralized configuration
-from backend.app.config import GEMINI_API_KEY, GEMINI_CHAT_MODEL
+from .config import GEMINI_API_KEY, GEMINI_CHAT_MODEL
 
 try:
     import google.generativeai as genai

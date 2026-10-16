@@ -1,25 +1,57 @@
 import os
 from pathlib import Path
+from typing import Optional
 from dotenv import load_dotenv
 from sqlalchemy import URL
 
-# 1. Load environment variables from .env file before reading configuration
+# 1. Base Paths & Environment Loading
 BASE_DIR = Path(__file__).resolve().parent       # backend/app
 BACKEND_DIR = BASE_DIR.parent                   # backend
 PROJECT_ROOT = BACKEND_DIR.parent               # researchPlatform
 dotenv_path = PROJECT_ROOT / ".env"
 
+# Load local .env without overwriting environment variables already provided by deployment/Render
 if dotenv_path.is_file():
-    load_dotenv(dotenv_path=dotenv_path)
+    load_dotenv(dotenv_path=dotenv_path, override=False)
 else:
-    load_dotenv()
+    load_dotenv(override=False)
+
+
+# --- Helper Parsing and Validation Functions ---
+
+def _parse_int(key: str, required: bool = False) -> Optional[int]:
+    """Parse an integer environment variable, raising a clear non-sensitive error if required or malformed."""
+    val = os.getenv(key)
+    if val is None or val.strip() == "":
+        if required:
+            raise ValueError(f"Missing required integer configuration: '{key}' must be set in environment or .env")
+        return None
+    try:
+        return int(val.strip())
+    except ValueError as exc:
+        raise ValueError(f"Invalid integer configuration for '{key}': '{val}'") from exc
+
+
+def _parse_bool(key: str, default: bool = False) -> bool:
+    """Parse a boolean environment variable safely."""
+    val = os.getenv(key)
+    if val is None or val.strip() == "":
+        return default
+    return val.strip().lower() in ("true", "1", "yes", "on")
+
+
+def _parse_list(key: str) -> list[str]:
+    """Parse a comma-separated list environment variable."""
+    val = os.getenv(key)
+    if not val:
+        return []
+    return [item.strip() for item in val.split(",") if item.strip()]
 
 
 # --- Database Configuration (PostgreSQL with pgvector / Supabase) ---
 DATABASE_URL_RAW = os.getenv("DATABASE_URL")
 
-if DATABASE_URL_RAW:
-    # Normalize postgres:// or postgresql:// to postgresql+psycopg://
+if DATABASE_URL_RAW and DATABASE_URL_RAW.strip():
     url_str = DATABASE_URL_RAW.strip()
     if url_str.startswith("postgres://"):
         url_str = url_str.replace("postgres://", "postgresql+psycopg://", 1)
@@ -28,25 +60,23 @@ if DATABASE_URL_RAW:
 
     from sqlalchemy import make_url
     DATABASE_URL = make_url(url_str)
-    DB_HOST = DATABASE_URL.host or "localhost"
+    DB_HOST = DATABASE_URL.host or ""
     DB_PORT = DATABASE_URL.port or 5432
-    DB_NAME = DATABASE_URL.database or "research_platform"
-    DB_USER = DATABASE_URL.username or "postgres"
+    DB_NAME = DATABASE_URL.database or ""
+    DB_USER = DATABASE_URL.username or ""
     DB_PASSWORD = DATABASE_URL.password or ""
+    DB_SSLMODE = DATABASE_URL.query.get("sslmode")
 else:
     DB_HOST = os.getenv("DB_HOST", "localhost")
-    try:
-        DB_PORT = int(os.getenv("DB_PORT", "5432"))
-    except (TypeError, ValueError):
-        DB_PORT = 5432
+    DB_PORT = _parse_int("DB_PORT", required=True)
     DB_NAME = os.getenv("DB_NAME", "research_platform")
     DB_USER = os.getenv("DB_USER", "postgres")
     DB_PASSWORD = os.getenv("DB_PASSWORD", "")
     DB_SSLMODE = os.getenv("DB_SSLMODE")
 
     query_params = {}
-    if DB_SSLMODE:
-        query_params["sslmode"] = DB_SSLMODE
+    if DB_SSLMODE and DB_SSLMODE.strip():
+        query_params["sslmode"] = DB_SSLMODE.strip()
 
     DATABASE_URL = URL.create(
         drivername="postgresql+psycopg",
@@ -58,73 +88,97 @@ else:
         query=query_params if query_params else {},
     )
 
-DB_POOL_SIZE = int(os.getenv("DB_POOL_SIZE", "5"))
-DB_MAX_OVERFLOW = int(os.getenv("DB_MAX_OVERFLOW", "5"))
-DB_POOL_RECYCLE = int(os.getenv("DB_POOL_RECYCLE", "300"))
+DB_POOL_SIZE = _parse_int("DB_POOL_SIZE", required=True)
+DB_MAX_OVERFLOW = _parse_int("DB_MAX_OVERFLOW", required=True)
+DB_POOL_RECYCLE = _parse_int("DB_POOL_RECYCLE", required=True)
 
 
 # --- Authentication Configuration (JWT & Cookies) ---
-JWT_SECRET_KEY = os.getenv("JWT_SECRET_KEY") or os.getenv("SECRET_KEY")
-JWT_ALGORITHM = os.getenv("JWT_ALGORITHM") or os.getenv("ALGORITHM", "HS256")
-ACCESS_TOKEN_EXPIRE_MINUTES = int(os.getenv("ACCESS_TOKEN_EXPIRE_MINUTES", "60"))
-REFRESH_TOKEN_EXPIRE_DAYS = int(os.getenv("REFRESH_TOKEN_EXPIRE_DAYS", "7"))
-COOKIE_SECURE = os.getenv("COOKIE_SECURE", "false").lower() in ("true", "1", "yes")
-COOKIE_SAMESITE = os.getenv("COOKIE_SAMESITE", "lax").lower()
+JWT_SECRET_KEY = os.getenv("JWT_SECRET_KEY")
+if not JWT_SECRET_KEY:
+    raise ValueError("Missing required configuration: 'JWT_SECRET_KEY' must be set in environment or .env")
+
+JWT_ALGORITHM = os.getenv("JWT_ALGORITHM")
+if not JWT_ALGORITHM:
+    raise ValueError("Missing required configuration: 'JWT_ALGORITHM' must be set in environment or .env")
+
+SECRET_KEY = JWT_SECRET_KEY
+ALGORITHM = JWT_ALGORITHM
+
+ACCESS_TOKEN_EXPIRE_MINUTES = _parse_int("ACCESS_TOKEN_EXPIRE_MINUTES", required=True)
+REFRESH_TOKEN_EXPIRE_DAYS = _parse_int("REFRESH_TOKEN_EXPIRE_DAYS", required=True)
+
+COOKIE_SECURE = _parse_bool("COOKIE_SECURE", default=False)
+COOKIE_SAMESITE = (os.getenv("COOKIE_SAMESITE") or "").strip().lower()
+# Modern browsers require Secure=True if SameSite=None
+if COOKIE_SAMESITE == "none" and not COOKIE_SECURE:
+    COOKIE_SECURE = True
 
 
 # --- LLM & Embeddings Configuration ---
-GEMINI_API_KEY = os.getenv("GEMINI_API_KEY") or os.getenv("EMBEDDING_API_KEY")
-GEMINI_EMBEDDING_MODEL = os.getenv("GEMINI_EMBEDDING_MODEL") or os.getenv(
-    "EMBEDDING_MODEL", "models/text-embedding-004"
-)
-GEMINI_CHAT_MODEL = os.getenv("GEMINI_CHAT_MODEL") or os.getenv(
-    "CHAT_MODEL", "models/gemini-3.8-flash"
-)
-# text-embedding-004 outputs 768-dimensional vectors
-EMBEDDING_DIMENSION = 768
+GEMINI_API_KEY = os.getenv("GEMINI_API_KEY")
+GEMINI_EMBEDDING_MODEL = os.getenv("GEMINI_EMBEDDING_MODEL")
+GEMINI_CHAT_MODEL = os.getenv("GEMINI_CHAT_MODEL")
+EMBEDDING_DIMENSION = _parse_int("EMBEDDING_DIMENSION", required=True)
 
 
 # --- Document Chunking & Retrieval Settings ---
-CHUNK_SIZE = int(os.getenv("CHUNK_SIZE", "500"))
-CHUNK_OVERLAP = int(os.getenv("CHUNK_OVERLAP", "50"))
-RETRIEVAL_LIMIT = int(os.getenv("RETRIEVAL_LIMIT", "5"))
-MAX_UPLOAD_SIZE_MB = int(os.getenv("MAX_UPLOAD_SIZE_MB", "20"))
+CHUNK_SIZE = _parse_int("CHUNK_SIZE", required=True)
+CHUNK_OVERLAP = _parse_int("CHUNK_OVERLAP", required=True)
+RETRIEVAL_LIMIT = _parse_int("RETRIEVAL_LIMIT", required=True)
+MAX_UPLOAD_SIZE_MB = _parse_int("MAX_UPLOAD_SIZE_MB", required=True)
 MAX_UPLOAD_SIZE_BYTES = MAX_UPLOAD_SIZE_MB * 1024 * 1024
 
 
 # --- LangSmith Tracing Configuration ---
-LANGCHAIN_TRACING_V2 = os.getenv("LANGCHAIN_TRACING_V2", "false").lower() in ("true", "1", "yes")
+LANGCHAIN_TRACING_V2 = _parse_bool("LANGCHAIN_TRACING_V2", default=False)
 LANGCHAIN_API_KEY = os.getenv("LANGCHAIN_API_KEY")
-LANGCHAIN_PROJECT = os.getenv("LANGCHAIN_PROJECT", "research-platform")
-LANGCHAIN_ENDPOINT = os.getenv("LANGCHAIN_ENDPOINT", "https://api.smith.langchain.com")
+LANGCHAIN_PROJECT = os.getenv("LANGCHAIN_PROJECT")
+LANGCHAIN_ENDPOINT = os.getenv("LANGCHAIN_ENDPOINT")
 
 if LANGCHAIN_TRACING_V2 and LANGCHAIN_API_KEY:
     os.environ["LANGCHAIN_TRACING_V2"] = "true"
     os.environ["LANGCHAIN_API_KEY"] = LANGCHAIN_API_KEY
-    os.environ["LANGCHAIN_PROJECT"] = LANGCHAIN_PROJECT
-    os.environ["LANGCHAIN_ENDPOINT"] = LANGCHAIN_ENDPOINT
+    if LANGCHAIN_PROJECT:
+        os.environ["LANGCHAIN_PROJECT"] = LANGCHAIN_PROJECT
+    if LANGCHAIN_ENDPOINT:
+        os.environ["LANGCHAIN_ENDPOINT"] = LANGCHAIN_ENDPOINT
 else:
     os.environ["LANGCHAIN_TRACING_V2"] = "false"
 
 
 # --- CORS Settings ---
-cors_raw = os.getenv("CORS_ORIGINS", "")
-if cors_raw:
-    CORS_ORIGINS = [origin.strip() for origin in cors_raw.split(",") if origin.strip()]
-else:
-    CORS_ORIGINS = [
-        "http://localhost:3000",
-        "http://localhost:5173",
-        "http://127.0.0.1:3000",
-        "http://127.0.0.1:5173",
-    ]
+CORS_ORIGINS = _parse_list("CORS_ORIGINS")
 
 
 # --- File Upload Storage ---
 upload_dir_env = os.getenv("UPLOAD_DIR")
-if upload_dir_env:
-    upload_path = Path(upload_dir_env)
+if upload_dir_env and upload_dir_env.strip():
+    upload_path = Path(upload_dir_env.strip())
     UPLOAD_DIR = upload_path if upload_path.is_absolute() else PROJECT_ROOT / upload_path
 else:
     UPLOAD_DIR = BACKEND_DIR / "uploads"
 UPLOAD_DIR.mkdir(parents=True, exist_ok=True)
+
+
+# --- Email & OTP Security Configuration ---
+OTP_SECRET_KEY = os.getenv("OTP_SECRET_KEY")
+if not OTP_SECRET_KEY:
+    raise ValueError("Missing required configuration: 'OTP_SECRET_KEY' must be set in environment or .env")
+
+OTP_VALIDITY_SECONDS = _parse_int("OTP_VALIDITY_SECONDS", required=True)
+OTP_RESEND_COOLDOWN_SECONDS = _parse_int("OTP_RESEND_COOLDOWN_SECONDS", required=True)
+OTP_MAX_ATTEMPTS = _parse_int("OTP_MAX_ATTEMPTS", required=True)
+OTP_MAX_HOURLY_SENDS = _parse_int("OTP_MAX_HOURLY_SENDS", required=True)
+REQUIRE_EMAIL_VERIFICATION = _parse_bool("REQUIRE_EMAIL_VERIFICATION", default=True)
+
+
+# --- SMTP Email Delivery Settings ---
+SMTP_HOST = os.getenv("SMTP_HOST")
+SMTP_PORT = _parse_int("SMTP_PORT", required=False)
+SMTP_USER = os.getenv("SMTP_USER")
+SMTP_PASSWORD = os.getenv("SMTP_PASSWORD")
+SMTP_FROM_EMAIL = os.getenv("SMTP_FROM_EMAIL") or SMTP_USER
+SMTP_USE_TLS = _parse_bool("SMTP_USE_TLS", default=False)
+SMTP_USE_SSL = _parse_bool("SMTP_USE_SSL", default=False)
+SMTP_TIMEOUT_SECONDS = _parse_int("SMTP_TIMEOUT_SECONDS", required=False) or 10

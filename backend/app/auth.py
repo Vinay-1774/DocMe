@@ -1,3 +1,4 @@
+import uuid
 from datetime import datetime, timedelta, timezone
 from typing import Optional, Union
 
@@ -9,8 +10,8 @@ from jwt.exceptions import PyJWTError as JWTError
 from sqlalchemy import select
 from sqlalchemy.orm import Session
 
-# Import centralized configuration
-from backend.app.config import (
+from . import config
+from .config import (
     ACCESS_TOKEN_EXPIRE_MINUTES,
     JWT_ALGORITHM,
     JWT_SECRET_KEY,
@@ -18,12 +19,16 @@ from backend.app.config import (
 )
 
 # Database dependency and models
-from backend.app.database import get_db
-from backend.app.models import User
-from backend.app.schema import UserCreate, UserLogin
+from .database import get_db
+from .models import User
+from .schema import UserCreate, UserLogin
+from .otp import cancel_otp_challenge, create_otp_challenge, verify_otp
+from .email import EmailDeliveryError, send_otp_email
+
 
 
 oauth2_scheme = OAuth2PasswordBearer(tokenUrl="token")
+
 oauth2_scheme_optional = OAuth2PasswordBearer(tokenUrl="token", auto_error=False)
 
 
@@ -43,15 +48,22 @@ def create_access_token(
     subject: Union[int, str],
     expires_delta: Optional[timedelta] = None,
 ) -> str:
-    """Generates a signed JWT access token containing subject (sub) and expiration (exp) claims."""
+    """Generates a signed JWT access token containing subject (sub), expiration (exp), and unique jti."""
     if not JWT_SECRET_KEY:
         raise RuntimeError("JWT_SECRET_KEY environment variable is not configured.")
 
-    expire = datetime.now(timezone.utc) + (
+    now = datetime.now(timezone.utc)
+    expire = now + (
         expires_delta if expires_delta else timedelta(minutes=ACCESS_TOKEN_EXPIRE_MINUTES)
     )
 
-    payload = {"sub": str(subject), "type": "access", "exp": expire}
+    payload = {
+        "sub": str(subject),
+        "type": "access",
+        "iat": int(now.timestamp()),
+        "exp": expire,
+        "jti": str(uuid.uuid4()),
+    }
     return jwt.encode(payload, JWT_SECRET_KEY, algorithm=JWT_ALGORITHM)
 
 
@@ -63,11 +75,18 @@ def create_refresh_token(
     if not JWT_SECRET_KEY:
         raise RuntimeError("JWT_SECRET_KEY environment variable is not configured.")
 
-    expire = datetime.now(timezone.utc) + (
+    now = datetime.now(timezone.utc)
+    expire = now + (
         expires_delta if expires_delta else timedelta(days=REFRESH_TOKEN_EXPIRE_DAYS)
     )
 
-    payload = {"sub": str(subject), "type": "refresh", "exp": expire}
+    payload = {
+        "sub": str(subject),
+        "type": "refresh",
+        "iat": int(now.timestamp()),
+        "exp": expire,
+        "jti": str(uuid.uuid4()),
+    }
     return jwt.encode(payload, JWT_SECRET_KEY, algorithm=JWT_ALGORITHM)
 
 
@@ -90,31 +109,88 @@ def verify_refresh_token(token: str) -> int:
 
 # --- Registration & Login Logic ---
 def register_user(user_data: UserCreate, db: Session) -> User:
-    """Registers a new user after verifying that the username and email are unique."""
+    """Registers a new user after verifying that the username and email are unique and validating OTP if provided."""
     existing_user = db.scalar(
         select(User).where(
             (User.email == user_data.email) | (User.username == user_data.username)
         )
     )
     if existing_user:
-        if existing_user.email == user_data.email:
+        # Allow retry if account is still unverified and both username and email match
+        if (
+            not existing_user.is_verified
+            and existing_user.email == user_data.email
+            and existing_user.username == user_data.username
+        ):
+            new_user = existing_user
+            new_user.hashed_password = hash_password(user_data.password)
+            db.commit()
+            db.refresh(new_user)
+        else:
+            if existing_user.email == user_data.email:
+                raise HTTPException(
+                    status_code=status.HTTP_400_BAD_REQUEST,
+                    detail="A user with this email is already registered.",
+                )
             raise HTTPException(
                 status_code=status.HTTP_400_BAD_REQUEST,
-                detail="A user with this email is already registered.",
+                detail="A user with this username is already registered.",
             )
-        raise HTTPException(
-            status_code=status.HTTP_400_BAD_REQUEST,
-            detail="A user with this username is already registered.",
-        )
+    else:
+        new_user = None
 
-    new_user = User(
-        username=user_data.username,
-        email=user_data.email,
-        hashed_password=hash_password(user_data.password),
-    )
-    db.add(new_user)
-    db.commit()
-    db.refresh(new_user)
+    # Determine initial verification state and OTP workflow
+    is_verified = False
+    if user_data.otp:
+        verification = verify_otp(
+            db=db,
+            email=user_data.email,
+            otp=user_data.otp,
+            purpose="registration",
+        )
+        if not verification.success:
+            raise HTTPException(
+                status_code=status.HTTP_400_BAD_REQUEST,
+                detail=verification.message,
+            )
+        is_verified = True
+    elif not config.REQUIRE_EMAIL_VERIFICATION:
+        is_verified = True
+
+    if new_user is None:
+        new_user = User(
+            username=user_data.username,
+            email=user_data.email,
+            hashed_password=hash_password(user_data.password),
+            is_verified=is_verified,
+        )
+        db.add(new_user)
+        db.commit()
+        db.refresh(new_user)
+    elif is_verified:
+        new_user.is_verified = True
+        db.commit()
+        db.refresh(new_user)
+
+    # If verification is required and OTP was not pre-supplied, trigger OTP challenge and email
+    if config.REQUIRE_EMAIL_VERIFICATION and not is_verified:
+        challenge, plaintext_otp = create_otp_challenge(
+            db=db,
+            email=new_user.email,
+            purpose="registration",
+            user_id=new_user.id,
+        )
+        try:
+            send_otp_email(to_email=new_user.email, otp=plaintext_otp, purpose="registration")
+
+        except EmailDeliveryError:
+            # Handle SMTP failure safely: remove challenge so user is not stuck behind cooldown or active OTP
+            cancel_otp_challenge(db, challenge)
+            raise HTTPException(
+                status_code=status.HTTP_503_SERVICE_UNAVAILABLE,
+                detail="User account created, but unable to deliver verification email at this time. Please check SMTP configuration or request a code resend.",
+            )
+
     return new_user
 
 
@@ -122,6 +198,7 @@ def authenticate_user_by_email(email: str, password: str, db: Session) -> dict:
     """
     Authenticates a user by email and password, returning a JWT access token.
     Enforces strict email lookup without querying by username.
+    Enforces email verification requirement if configured by authentication policy.
     """
     user = db.scalar(select(User).where(User.email == email))
     if not user or not verify_password(password, user.hashed_password):
@@ -131,11 +208,19 @@ def authenticate_user_by_email(email: str, password: str, db: Session) -> dict:
             headers={"WWW-Authenticate": "Bearer"},
         )
 
+    if config.REQUIRE_EMAIL_VERIFICATION and not user.is_verified:
+        raise HTTPException(
+            status_code=status.HTTP_403_FORBIDDEN,
+            detail="Email address is not verified. Please verify your email before logging in.",
+        )
+
+
     access_token = create_access_token(subject=user.id)
     return {
         "access_token": access_token,
         "token_type": "bearer",
     }
+
 
 
 def login_user(login_data: UserLogin, db: Session) -> dict:

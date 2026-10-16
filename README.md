@@ -122,16 +122,35 @@ Once running:
 
 ---
 
+## Running the Frontend
+
+The DocMe frontend is a static web application built with ES Modules. Serve the `frontend/` directory using Python's built-in HTTP server or any static web server:
+
+```bash
+python3 -m http.server 3000 --directory frontend
+```
+
+Once running:
+- **Application URL**: [http://localhost:3000/](http://localhost:3000/)
+- Automatically redirects authenticated users to `/pages/feed.html` and unauthenticated users to `/pages/login.html`.
+- Connects automatically to the backend running at [http://localhost:8000/](http://localhost:8000/).
+
+---
+
 ## API Endpoints Reference
 
 ### Health
 - `GET /` — Returns API service status
 
-### Authentication
-- `POST /register` — Register a new user (`username`, `email`, `password`)
+### Authentication & Email Verification
+- `POST /register` — Register a new user (`username`, `email`, `password`) and trigger 6-digit email OTP challenge
 - `POST /token` — OAuth2 password form login for Swagger UI and OAuth2 clients (`application/x-www-form-urlencoded` with `username` [user's email] and `password`)
 - `POST /login` — JSON login endpoint for frontend and API clients (`application/json` with `email` and `password`)
+- `POST /refresh` — Refresh access token using HttpOnly cookie or bearer token
+- `POST /logout` — Clear auth cookies and invalidate session
 - `GET /me` — Retrieve the authenticated user's profile
+- `POST /auth/otp/verify` — Verify 6-digit email OTP (`email`, `otp`, `purpose`)
+- `POST /auth/otp/resend` — Request new OTP with 30s server-enforced cooldown
 
 ### Discovery & Feeds
 - `GET /feed` (or `GET /documents/feed`) — Public document feed
@@ -171,14 +190,23 @@ Tests use an isolated database (`research_platform_test`) to ensure no productio
    createdb -U postgres research_platform_test
    ```
 
-2. **Run Pytest:**
+2. **Run Pytest (Backend & OTP Security):**
    ```bash
-   pytest tests/test_backend.py -v
+   pytest tests/test_otp.py tests/test_backend.py -v
    ```
 
-All 12 test suites cover:
+3. **Run Node.js Frontend Tests (Auth, Typing Animation, OTP, DOM Validation):**
+   ```bash
+   node tests/test_frontend_auth.mjs
+   node tests/test_typing_indicator.mjs
+   node tests/test_frontend_otp.mjs
+   node tests/test_register_dom.mjs
+   ```
+
+Test coverage includes:
 - Root API status check
 - User registration, duplicate username/email rejection
+- HMAC-SHA256 OTP generation, 30s expiry, max attempt lockout, cooldown, atomic consumption
 - Login authentication, invalid credentials, and expired/malformed tokens
 - Password hash security (never exposed in responses)
 - Document upload (PDF, DOCX) and unsupported file rejection
@@ -187,6 +215,7 @@ All 12 test suites cover:
 - Discovery endpoints (`/feed`, `/documents/popular`, `/users/ranking`)
 - pgvector similarity retrieval with database-level ownership filtering
 - LangGraph Q&A chat endpoint with source citations
+- Frontend token refresh deduplication, single 401 retry, DOM validation, and typing indicator lifecycle
 
 ---
 

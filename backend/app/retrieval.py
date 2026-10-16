@@ -7,10 +7,10 @@ from sqlalchemy.orm import Session
 logger = logging.getLogger(__name__)
 
 # Import centralized configuration
-from backend.app.config import RETRIEVAL_LIMIT
-from backend.app.database import SessionLocal
-from backend.app.models import Document, DocumentChunk
-from backend.app.ingestion import generate_embedding
+from .config import RETRIEVAL_LIMIT
+from .database import SessionLocal
+from .models import Document, DocumentChunk
+from .ingestion import generate_embedding
 
 
 def retrieve_documents(

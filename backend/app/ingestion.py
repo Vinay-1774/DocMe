@@ -1,14 +1,14 @@
 import hashlib
 import logging
 import os
-from typing import Any, List, Optional
+from typing import Any, List
 
 logger = logging.getLogger(__name__)
 
 from sqlalchemy import func, select
 from sqlalchemy.orm import Session
 
-from backend.app.config import CHUNK_OVERLAP, CHUNK_SIZE, GEMINI_API_KEY, GEMINI_EMBEDDING_MODEL
+from .config import CHUNK_OVERLAP, CHUNK_SIZE, GEMINI_API_KEY, GEMINI_EMBEDDING_MODEL
 
 # Safe imports for extraction and embedding providers
 try:
@@ -27,7 +27,7 @@ except ImportError:
     genai = None
 
 # Database models
-from backend.app.models import Document, DocumentChunk
+from .models import DocumentChunk
 
 
 SUPPORTED_EXTENSIONS = {".pdf", ".docx"}
