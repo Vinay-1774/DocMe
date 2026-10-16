@@ -18,9 +18,195 @@ async function initDocumentChat() {
   const params = new URLSearchParams(window.location.search);
   const documentId = params.get('id');
 
+  // Upload Modal Elements & Event Handlers
+  const uploadModal = document.getElementById('upload-modal');
+  const emptyUploadAction = document.getElementById('empty-upload-action');
+  const closeUploadModalBtn = document.getElementById('close-upload-modal-btn');
+  const cancelUploadBtn = document.getElementById('cancel-upload-btn');
+  const uploadForm = document.getElementById('upload-form');
+  const uploadAlert = document.getElementById('upload-alert');
+  const docTitleInput = document.getElementById('doc-title');
+  const docFileInput = document.getElementById('doc-file');
+  const submitUploadBtn = document.getElementById('submit-upload-btn');
+  const uploadBtnText = document.getElementById('upload-btn-text');
+  const uploadBtnSpinner = document.getElementById('upload-btn-spinner');
+
+  const openUploadModal = (e) => {
+    if (e) {
+      e.preventDefault();
+      e.stopPropagation();
+    }
+    if (uploadForm) uploadForm.reset();
+    if (uploadAlert) uploadAlert.style.display = 'none';
+    if (uploadModal) uploadModal.style.display = 'flex';
+  };
+
+  const closeUploadModal = () => {
+    if (uploadModal) uploadModal.style.display = 'none';
+  };
+
+  emptyUploadAction?.addEventListener('click', openUploadModal);
+  closeUploadModalBtn?.addEventListener('click', closeUploadModal);
+  cancelUploadBtn?.addEventListener('click', closeUploadModal);
+  uploadModal?.addEventListener('click', (e) => {
+    if (e.target === uploadModal) closeUploadModal();
+  });
+
+  document.addEventListener('click', (e) => {
+    const uploadTrigger = e.target.closest('#empty-upload-action, #open-upload-btn, .empty-upload-action, [data-action="upload-document"]');
+    if (uploadTrigger) {
+      e.preventDefault();
+      e.stopPropagation();
+      openUploadModal(e);
+    }
+  });
+
+  // Delete Modal Elements
+  const deleteDocBtn = document.getElementById('delete-doc-btn');
+  const deleteModal = document.getElementById('delete-doc-modal');
+  const closeDeleteModalBtn = document.getElementById('close-delete-modal-btn');
+  const cancelDeleteBtn = document.getElementById('cancel-delete-btn');
+  const confirmDeleteBtn = document.getElementById('confirm-delete-btn');
+  const deleteDocTitleDisplay = document.getElementById('delete-doc-title-display');
+  const deleteModalAlert = document.getElementById('delete-modal-alert');
+  const deleteBtnText = document.getElementById('delete-btn-text');
+  const deleteBtnSpinner = document.getElementById('delete-btn-spinner');
+
+  const openDeleteModal = () => {
+    if (!currentDoc) return;
+    if (deleteDocTitleDisplay) deleteDocTitleDisplay.textContent = `"${currentDoc.title}"`;
+    if (deleteModalAlert) deleteModalAlert.style.display = 'none';
+    if (confirmDeleteBtn) confirmDeleteBtn.disabled = false;
+    if (cancelDeleteBtn) cancelDeleteBtn.disabled = false;
+    if (deleteBtnText) deleteBtnText.textContent = 'Delete Document';
+    if (deleteBtnSpinner) deleteBtnSpinner.style.display = 'none';
+    if (deleteModal) deleteModal.style.display = 'flex';
+  };
+
+  const closeDeleteModal = () => {
+    if (deleteModal) deleteModal.style.display = 'none';
+  };
+
+  deleteDocBtn?.addEventListener('click', (e) => {
+    e.preventDefault();
+    e.stopPropagation();
+    openDeleteModal();
+  });
+
+  closeDeleteModalBtn?.addEventListener('click', closeDeleteModal);
+  cancelDeleteBtn?.addEventListener('click', closeDeleteModal);
+  deleteModal?.addEventListener('click', (e) => {
+    if (e.target === deleteModal) closeDeleteModal();
+  });
+
+  confirmDeleteBtn?.addEventListener('click', async () => {
+    if (!currentDoc) return;
+
+    confirmDeleteBtn.disabled = true;
+    cancelDeleteBtn.disabled = true;
+    if (deleteBtnText) deleteBtnText.textContent = 'Deleting...';
+    if (deleteBtnSpinner) deleteBtnSpinner.style.display = 'inline-block';
+    if (deleteModalAlert) deleteModalAlert.style.display = 'none';
+
+    try {
+      await api.deleteDocument(currentDoc.id);
+      closeDeleteModal();
+      window.location.href = 'profile.html';
+    } catch (err) {
+      if (deleteModalAlert) {
+        deleteModalAlert.textContent = err?.message || 'Could not delete document. Please try again.';
+        deleteModalAlert.style.display = 'block';
+      }
+    } finally {
+      if (confirmDeleteBtn) confirmDeleteBtn.disabled = false;
+      if (cancelDeleteBtn) cancelDeleteBtn.disabled = false;
+      if (deleteBtnText) deleteBtnText.textContent = 'Delete Document';
+      if (deleteBtnSpinner) deleteBtnSpinner.style.display = 'none';
+    }
+  });
+
+  document.addEventListener('keydown', (e) => {
+    if (e.key === 'Escape') {
+      if (uploadModal && uploadModal.style.display === 'flex') closeUploadModal();
+      if (deleteModal && deleteModal.style.display === 'flex') closeDeleteModal();
+    }
+  });
+
+  docFileInput?.addEventListener('change', () => {
+    if (docFileInput.files && docFileInput.files.length > 0 && !docTitleInput.value.trim()) {
+      const fileName = docFileInput.files[0].name.replace(/\.[^/.]+$/, "");
+      docTitleInput.value = fileName;
+    }
+  });
+
+  uploadForm?.addEventListener('submit', async (e) => {
+    e.preventDefault();
+    e.stopPropagation();
+    if (uploadAlert) uploadAlert.style.display = 'none';
+
+    const title = docTitleInput?.value.trim();
+    const descEl = document.getElementById('doc-desc');
+    const description = descEl ? descEl.value.trim() : '';
+    const visEl = document.getElementById('doc-visibility');
+    const visibility = visEl ? visEl.value : 'public';
+    const file = docFileInput?.files ? docFileInput.files[0] : null;
+
+    if (!title) {
+      if (uploadAlert) {
+        uploadAlert.textContent = 'Please provide a document title.';
+        uploadAlert.style.display = 'block';
+      }
+      return;
+    }
+
+    if (!file) {
+      if (uploadAlert) {
+        uploadAlert.textContent = 'Please select a PDF (.pdf) or Word (.docx) document.';
+        uploadAlert.style.display = 'block';
+      }
+      return;
+    }
+
+    const formData = new FormData();
+    formData.append('title', title);
+    if (description) formData.append('description', description);
+    formData.append('visibility', visibility);
+    formData.append('file', file);
+
+    if (submitUploadBtn) submitUploadBtn.disabled = true;
+    if (uploadBtnText) uploadBtnText.textContent = 'Uploading...';
+    if (uploadBtnSpinner) uploadBtnSpinner.style.display = 'inline-block';
+
+    try {
+      const docResult = await api.uploadDocument(formData);
+      closeUploadModal();
+      window.location.href = `document-chat.html?id=${docResult.id}`;
+    } catch (err) {
+      const msg = err instanceof ApiError ? err.message : (err?.message || 'Could not upload document. Please try again.');
+      if (uploadAlert) {
+        uploadAlert.textContent = msg;
+        uploadAlert.style.display = 'block';
+      }
+    } finally {
+      if (submitUploadBtn) submitUploadBtn.disabled = false;
+      if (uploadBtnText) uploadBtnText.textContent = 'Upload';
+      if (uploadBtnSpinner) uploadBtnSpinner.style.display = 'none';
+    }
+  });
+
   if (!documentId) {
-    alert('No document specified. Redirecting to feed.');
-    window.location.href = 'feed.html';
+    const viewerPane = document.querySelector('.viewer-pane');
+    const chatPane = document.querySelector('.chat-pane');
+    const emptyState = document.getElementById('docs-empty-state');
+    if (viewerPane) viewerPane.style.display = 'none';
+    if (chatPane) chatPane.style.display = 'none';
+    if (emptyState) emptyState.style.display = 'flex';
+    const docHeaderTitle = document.getElementById('doc-header-title');
+    const docBadgeFormat = document.getElementById('doc-badge-format');
+    const downloadDocBtn = document.getElementById('download-doc-btn');
+    if (docHeaderTitle) docHeaderTitle.textContent = 'No Document Selected';
+    if (docBadgeFormat) docBadgeFormat.style.display = 'none';
+    if (downloadDocBtn) downloadDocBtn.style.display = 'none';
     return;
   }
 
@@ -99,6 +285,12 @@ async function initDocumentChat() {
     // Navbar metadata
     docHeaderTitle.textContent = doc.title;
     document.title = `${doc.title} — Research Platform Chat`;
+
+    const currentUser = getUser();
+    const isOwner = currentUser && (String(currentUser.id) === String(doc.user_id));
+    if (deleteDocBtn) {
+      deleteDocBtn.style.display = isOwner ? 'inline-flex' : 'none';
+    }
 
     docBadgeFormat.textContent = (doc.file_type || 'DOC').toUpperCase();
     docBadgeFormat.className = `badge ${isPdf ? 'badge-pdf' : 'badge-docx'}`;
@@ -222,6 +414,7 @@ async function initDocumentChat() {
 
     try {
       let fullAnswer = '';
+      let errorOccurred = false;
 
       await api.streamChat(documentId, question, {
         onToken: (token) => {
@@ -234,12 +427,13 @@ async function initDocumentChat() {
           setSources(sources);
         },
         onError: (errDetail) => {
+          errorOccurred = true;
           hideTypingIndicator();
-          finalize(fullAnswer);
           showError(errDetail || "We couldn't generate an answer right now. Please try again.");
         },
         onDone: () => {
           hideTypingIndicator();
+          if (errorOccurred) return;
           if (!fullAnswer || !fullAnswer.trim()) {
             showError("No response was generated for this question. Please try rephrasing.");
           } else {

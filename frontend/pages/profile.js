@@ -69,12 +69,184 @@ async function initProfilePage() {
     if (e.target === editModal) closeEditModal();
   });
 
-  document.getElementById('open-upload-btn')?.addEventListener('click', () => {
-    window.location.href = 'feed.html';
+  // Delete Modal Elements
+  const deleteModal = document.getElementById('delete-doc-modal');
+  const closeDeleteModalBtn = document.getElementById('close-delete-modal-btn');
+  const cancelDeleteBtn = document.getElementById('cancel-delete-btn');
+  const confirmDeleteBtn = document.getElementById('confirm-delete-btn');
+  const deleteDocTitleDisplay = document.getElementById('delete-doc-title-display');
+  const deleteModalAlert = document.getElementById('delete-modal-alert');
+  const deleteBtnText = document.getElementById('delete-btn-text');
+  const deleteBtnSpinner = document.getElementById('delete-btn-spinner');
+  let pendingDeleteId = null;
+  let pendingDeleteTitle = '';
+
+  const openDeleteModal = (docId, docTitle) => {
+    pendingDeleteId = docId;
+    pendingDeleteTitle = docTitle;
+    if (deleteDocTitleDisplay) deleteDocTitleDisplay.textContent = `"${docTitle}"`;
+    if (deleteModalAlert) deleteModalAlert.style.display = 'none';
+    if (confirmDeleteBtn) confirmDeleteBtn.disabled = false;
+    if (cancelDeleteBtn) cancelDeleteBtn.disabled = false;
+    if (deleteBtnText) deleteBtnText.textContent = 'Delete Document';
+    if (deleteBtnSpinner) deleteBtnSpinner.style.display = 'none';
+    if (deleteModal) deleteModal.style.display = 'flex';
+  };
+
+  const closeDeleteModal = () => {
+    if (deleteModal) deleteModal.style.display = 'none';
+    pendingDeleteId = null;
+    pendingDeleteTitle = '';
+  };
+
+  closeDeleteModalBtn?.addEventListener('click', closeDeleteModal);
+  cancelDeleteBtn?.addEventListener('click', closeDeleteModal);
+  deleteModal?.addEventListener('click', (e) => {
+    if (e.target === deleteModal) closeDeleteModal();
   });
-  document.getElementById('empty-upload-action')?.addEventListener('click', () => {
-    window.location.href = 'feed.html';
+
+  confirmDeleteBtn?.addEventListener('click', async () => {
+    if (!pendingDeleteId) return;
+
+    confirmDeleteBtn.disabled = true;
+    cancelDeleteBtn.disabled = true;
+    if (deleteBtnText) deleteBtnText.textContent = 'Deleting...';
+    if (deleteBtnSpinner) deleteBtnSpinner.style.display = 'inline-block';
+    if (deleteModalAlert) deleteModalAlert.style.display = 'none';
+
+    try {
+      await api.deleteDocument(pendingDeleteId);
+      const title = pendingDeleteTitle;
+      closeDeleteModal();
+      showSuccessAlert(`Document "${title}" deleted successfully.`);
+      await loadUserDocuments();
+    } catch (err) {
+      if (deleteModalAlert) {
+        deleteModalAlert.textContent = err?.message || 'Could not delete document. Please try again.';
+        deleteModalAlert.style.display = 'block';
+      }
+    } finally {
+      if (confirmDeleteBtn) confirmDeleteBtn.disabled = false;
+      if (cancelDeleteBtn) cancelDeleteBtn.disabled = false;
+      if (deleteBtnText) deleteBtnText.textContent = 'Delete Document';
+      if (deleteBtnSpinner) deleteBtnSpinner.style.display = 'none';
+    }
   });
+
+  // Upload Modal Elements
+  const uploadModal = document.getElementById('upload-modal');
+  const openUploadBtn = document.getElementById('open-upload-btn');
+  const emptyUploadAction = document.getElementById('empty-upload-action');
+  const closeUploadModalBtn = document.getElementById('close-upload-modal-btn');
+  const cancelUploadBtn = document.getElementById('cancel-upload-btn');
+  const uploadForm = document.getElementById('upload-form');
+  const uploadAlert = document.getElementById('upload-alert');
+  const docTitleInput = document.getElementById('doc-title');
+  const docFileInput = document.getElementById('doc-file');
+  const submitUploadBtn = document.getElementById('submit-upload-btn');
+  const uploadBtnText = document.getElementById('upload-btn-text');
+  const uploadBtnSpinner = document.getElementById('upload-btn-spinner');
+
+  const openUploadModal = (e) => {
+    if (e) {
+      e.preventDefault();
+      e.stopPropagation();
+    }
+    if (uploadForm) uploadForm.reset();
+    if (uploadAlert) uploadAlert.style.display = 'none';
+    if (uploadModal) uploadModal.style.display = 'flex';
+  };
+
+  const closeUploadModal = () => {
+    if (uploadModal) uploadModal.style.display = 'none';
+  };
+
+  // Direct element listeners
+  openUploadBtn?.addEventListener('click', openUploadModal);
+  emptyUploadAction?.addEventListener('click', openUploadModal);
+  closeUploadModalBtn?.addEventListener('click', closeUploadModal);
+  cancelUploadBtn?.addEventListener('click', closeUploadModal);
+  uploadModal?.addEventListener('click', (e) => {
+    if (e.target === uploadModal) closeUploadModal();
+  });
+
+  // Global event delegation to guarantee catching all empty-state & upload clicks
+  document.addEventListener('click', (e) => {
+    const uploadTrigger = e.target.closest('#empty-upload-action, #open-upload-btn, .empty-upload-action, [data-action="upload-document"]');
+    if (uploadTrigger) {
+      e.preventDefault();
+      e.stopPropagation();
+      openUploadModal(e);
+    }
+  });
+
+  // Close modal on Escape key
+  document.addEventListener('keydown', (e) => {
+    if (e.key === 'Escape') {
+      if (uploadModal && uploadModal.style.display === 'flex') closeUploadModal();
+      if (editModal && editModal.style.display === 'flex') closeEditModal();
+      if (deleteModal && deleteModal.style.display === 'flex') closeDeleteModal();
+    }
+  });
+
+  // Auto-populate title from selected file if title input is empty
+  docFileInput?.addEventListener('change', () => {
+    if (docFileInput.files && docFileInput.files.length > 0 && !docTitleInput.value.trim()) {
+      const fileName = docFileInput.files[0].name.replace(/\.[^/.]+$/, "");
+      docTitleInput.value = fileName;
+    }
+  });
+
+  // Handle Document Upload Submission
+  uploadForm?.addEventListener('submit', async (e) => {
+    e.preventDefault();
+    e.stopPropagation();
+    uploadAlert.style.display = 'none';
+
+    const title = docTitleInput.value.trim();
+    const description = document.getElementById('doc-desc').value.trim();
+    const visibility = document.getElementById('doc-visibility').value;
+    const file = docFileInput.files[0];
+
+    if (!title) {
+      showUploadError('Please provide a document title.');
+      return;
+    }
+
+    if (!file) {
+      showUploadError('Please select a PDF (.pdf) or Word (.docx) document.');
+      return;
+    }
+
+    const formData = new FormData();
+    formData.append('title', title);
+    if (description) formData.append('description', description);
+    formData.append('visibility', visibility);
+    formData.append('file', file);
+
+    submitUploadBtn.disabled = true;
+    uploadBtnText.textContent = 'Uploading...';
+    uploadBtnSpinner.style.display = 'inline-block';
+
+    try {
+      const docResult = await api.uploadDocument(formData);
+      closeUploadModal();
+      showSuccessAlert(`Document "${docResult.title}" uploaded successfully.`);
+      await loadUserDocuments();
+    } catch (err) {
+      const msg = err instanceof ApiError ? err.message : (err?.message || 'Could not upload document. Please try again.');
+      showUploadError(msg);
+    } finally {
+      submitUploadBtn.disabled = false;
+      uploadBtnText.textContent = 'Upload';
+      uploadBtnSpinner.style.display = 'none';
+    }
+  });
+
+  function showUploadError(msg) {
+    uploadAlert.textContent = msg;
+    uploadAlert.style.display = 'block';
+  }
 
   let activeProfileUser = null;
 
@@ -238,6 +410,15 @@ async function initProfilePage() {
             </svg>
             <span>Edit Settings</span>
           </button>
+          <button type="button" class="btn btn-outline-danger btn-sm delete-doc-btn" data-doc-id="${doc.id}" data-doc-title="${escapeHtml(doc.title)}" title="Delete document">
+            <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2">
+              <polyline points="3 6 5 6 21 6"></polyline>
+              <path d="M19 6v14a2 2 0 0 1-2 2H7a2 2 0 0 1-2-2V6m3 0V4a2 2 0 0 1 2-2h4a2 2 0 0 1 2 2v2"></path>
+              <line x1="10" y1="11" x2="10" y2="17"></line>
+              <line x1="14" y1="11" x2="14" y2="17"></line>
+            </svg>
+            <span>Delete</span>
+          </button>
         </div>` : ''}
       </div>
     `;
@@ -259,6 +440,12 @@ async function initProfilePage() {
     const editBtn = card.querySelector('.edit-doc-btn');
     editBtn?.addEventListener('click', () => {
       openEditModal(doc);
+    });
+
+    // Delete button click
+    const deleteBtn = card.querySelector('.delete-doc-btn');
+    deleteBtn?.addEventListener('click', () => {
+      openDeleteModal(doc.id, doc.title);
     });
 
     return card;

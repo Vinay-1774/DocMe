@@ -510,6 +510,13 @@ export const api = {
     });
   },
 
+  async deleteDocument(documentId) {
+    return apiRequest(`/documents/${encodeURIComponent(documentId)}`, {
+      method: 'DELETE',
+      authRequired: true,
+    });
+  },
+
   async fetchAuthenticated(url, options = {}) {
     return apiFetch(url, options);
   },
@@ -667,6 +674,7 @@ export const api = {
       const decoder = new TextDecoder('utf-8');
       let buffer = '';
       let doneDispatched = false;
+      let hasError = false;
 
       while (true) {
         const { done, value } = await reader.read();
@@ -701,6 +709,7 @@ export const api = {
               doneDispatched = true;
               onDone(parsed);
             } else if (eventType === 'error' && onError) {
+              hasError = true;
               onError(parsed.detail || 'An error occurred during response generation.');
             }
           } catch (jsonErr) {
@@ -709,7 +718,7 @@ export const api = {
         }
       }
 
-      if (!doneDispatched && onDone) {
+      if (!doneDispatched && !hasError && onDone) {
         onDone({ status: 'completed' });
       }
     } catch (networkErr) {

@@ -44,6 +44,7 @@ from .schema import (
     OTPRequest,
     OTPVerifyRequest,
     OTPResponse,
+    MessageResponse,
 )
 from .auth import (
     create_access_token,
@@ -703,6 +704,77 @@ def update_document(
     db.commit()
     db.refresh(doc)
     return doc
+
+
+@app.delete("/documents/{document_id}", response_model=MessageResponse, status_code=status.HTTP_200_OK)
+@app.delete("/api/documents/{document_id}", response_model=MessageResponse, status_code=status.HTTP_200_OK)
+def delete_document(
+    document_id: int,
+    current_user: User = Depends(get_current_user),
+    db: Session = Depends(get_db),
+):
+    """
+    Deletes a document and its associated data:
+    - Requires authentication.
+    - Verifies document exists.
+    - Verifies authenticated user is the document owner.
+    - Returns 404 for nonexistent or private inaccessible documents.
+    - Prevents unauthorized deletion of other users' documents (403 for unauthorized).
+    - Cascades deletion to DocumentChunk records and pgvector embeddings.
+    - Cascades deletion to Comment records.
+    - Cleans up the uploaded file from disk storage safely.
+    """
+    doc = db.scalar(select(Document).where(Document.id == document_id))
+    if not doc:
+        raise HTTPException(
+            status_code=status.HTTP_404_NOT_FOUND,
+            detail="Document not found.",
+        )
+
+    if doc.user_id != current_user.id:
+        if doc.visibility == "private":
+            raise HTTPException(
+                status_code=status.HTTP_404_NOT_FOUND,
+                detail="Document not found.",
+            )
+        raise HTTPException(
+            status_code=status.HTTP_403_FORBIDDEN,
+            detail="Only the document owner can delete this document.",
+        )
+
+    file_path_str = doc.file_path
+
+    # Check if another document in the database references the same file path (deduplication safeguard)
+    other_docs_count = db.scalar(
+        select(func.count(Document.id)).where(
+            Document.file_path == file_path_str,
+            Document.id != doc.id,
+        )
+    ) or 0
+
+    try:
+        db.delete(doc)
+        db.commit()
+    except Exception as e:
+        db.rollback()
+        logger.error("Failed to delete document %s from database: %s", document_id, e, exc_info=True)
+        raise HTTPException(
+            status_code=status.HTTP_500_INTERNAL_SERVER_ERROR,
+            detail="Failed to delete document from database.",
+        )
+
+    # Safely remove uploaded file from storage if no other document references it
+    if other_docs_count == 0 and file_path_str:
+        try:
+            if os.path.isfile(file_path_str):
+                os.unlink(file_path_str)
+        except OSError as e:
+            logger.warning("Could not delete file %s from disk after document deletion: %s", file_path_str, e)
+
+    return MessageResponse(
+        message="Document deleted successfully.",
+        id=document_id,
+    )
 
 
 @app.get("/documents/{document_id}/download")

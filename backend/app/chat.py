@@ -81,6 +81,34 @@ def build_prompt(
     )
 
 
+FALLBACK_CHAT_MODELS = [
+    "models/gemini-3.5-flash",
+    "models/gemini-3.5-flash-lite",
+    "models/gemini-3.8-flash",
+    "models/gemini-flash-latest",
+]
+
+
+def _get_model_candidates(requested_model: Optional[str] = None) -> List[str]:
+    """Returns an ordered, deduplicated list of Gemini models to attempt."""
+    primary = requested_model or GEMINI_CHAT_MODEL or "models/gemini-3.5-flash"
+    candidates = [primary]
+    for m in FALLBACK_CHAT_MODELS:
+        if m not in candidates:
+            candidates.append(m)
+    return candidates
+
+
+def _format_error_detail(err: Exception) -> str:
+    """Formats an exception into a clear, user-friendly error message without leaking sensitive internals."""
+    err_str = str(err).lower()
+    if "429" in err_str or "quota" in err_str or "resourceexhausted" in err_str or "rate limit" in err_str:
+        return "Gemini API rate limit or quota exceeded. Please wait a few moments and try again."
+    if "404" in err_str or "not found" in err_str or "not available" in err_str:
+        return "The AI model is temporarily unavailable. Please try again shortly."
+    return "An error occurred during response generation."
+
+
 def generate_response(
     question: str,
     context: List[str],
@@ -99,17 +127,32 @@ def generate_response(
     if not context or not any(c.strip() for c in context):
         return "The provided document context does not contain sufficient information to answer this question."
 
-    t_start = time.perf_counter()
     prompt = build_prompt(question=question, context=context, sources=sources)
-    model = get_model(api_key=api_key, model_name=model_name)
-    response = model.generate_content(prompt)
-    t_gen_ms = (time.perf_counter() - t_start) * 1000
-    logger.info("Non-streaming LLM response generated in %.2fms", t_gen_ms)
+    candidates = _get_model_candidates(model_name)
+    last_error: Optional[Exception] = None
 
-    if not response.text:
-        return "The provided document context does not contain sufficient information to answer this question."
+    for candidate in candidates:
+        try:
+            t_start = time.perf_counter()
+            model = get_model(api_key=api_key, model_name=candidate)
+            response = model.generate_content(prompt)
+            t_gen_ms = (time.perf_counter() - t_start) * 1000
+            logger.info("Non-streaming LLM response generated using '%s' in %.2fms", candidate, t_gen_ms)
 
-    return response.text.strip()
+            text = getattr(response, "text", "")
+            if not text:
+                return "The provided document context does not contain sufficient information to answer this question."
+            return text.strip()
+        except Exception as e:
+            logger.warning("Generation with model '%s' failed: %s", candidate, e)
+            last_error = e
+            continue
+
+    if last_error:
+        logger.error("All model candidates failed for non-streaming response: %s", last_error, exc_info=True)
+        return _format_error_detail(last_error)
+
+    return "The provided document context does not contain sufficient information to answer this question."
 
 
 def stream_response(
@@ -139,35 +182,59 @@ def stream_response(
     if sources:
         yield f"event: sources\ndata: {json.dumps(sources)}\n\n"
 
-    # 2. Stream tokens from the model provider with TTFT tracking
-    t_stream_start = time.perf_counter()
-    first_token_time = None
-    chunk_count = 0
+    prompt = build_prompt(question=question, context=context, sources=sources)
+    candidates = _get_model_candidates(model_name)
+    stream_successful = False
+    last_error: Optional[Exception] = None
 
-    try:
-        prompt = build_prompt(question=question, context=context, sources=sources)
-        model = get_model(api_key=api_key, model_name=model_name)
-        response = model.generate_content(prompt, stream=True)
+    for candidate in candidates:
+        t_stream_start = time.perf_counter()
+        first_token_time = None
+        chunk_count = 0
+        token_emitted = False
 
-        for chunk in response:
-            text = getattr(chunk, "text", None)
-            if text:
-                if first_token_time is None:
-                    first_token_time = time.perf_counter()
-                    ttft_ms = (first_token_time - t_stream_start) * 1000
-                    logger.info("Streaming TTFT (Time To First Token): %.2fms", ttft_ms)
-                chunk_count += 1
-                yield f"event: message\ndata: {json.dumps({'text': text})}\n\n"
+        try:
+            model = get_model(api_key=api_key, model_name=candidate)
+            response = model.generate_content(prompt, stream=True)
 
-        total_stream_ms = (time.perf_counter() - t_stream_start) * 1000
-        logger.info(
-            "Streaming completed in %.2fms (%d chunks generated)",
-            total_stream_ms,
-            chunk_count,
-        )
+            for chunk in response:
+                text = None
+                try:
+                    text = chunk.text
+                except Exception:
+                    text = None
 
-        # 3. Clear completion event
-        yield f"event: done\ndata: {json.dumps({'status': 'completed'})}\n\n"
-    except Exception as e:
-        logger.error("Streaming generation failed: %s", e, exc_info=True)
-        yield f"event: error\ndata: {json.dumps({'detail': 'An error occurred during response generation.'})}\n\n"
+                if text:
+                    if first_token_time is None:
+                        first_token_time = time.perf_counter()
+                        ttft_ms = (first_token_time - t_stream_start) * 1000
+                        logger.info("Streaming TTFT (Time To First Token) [%s]: %.2fms", candidate, ttft_ms)
+                    chunk_count += 1
+                    token_emitted = True
+                    yield f"event: message\ndata: {json.dumps({'text': text})}\n\n"
+
+            if chunk_count > 0 or token_emitted:
+                total_stream_ms = (time.perf_counter() - t_stream_start) * 1000
+                logger.info(
+                    "Streaming completed with '%s' in %.2fms (%d chunks generated)",
+                    candidate,
+                    total_stream_ms,
+                    chunk_count,
+                )
+                yield f"event: done\ndata: {json.dumps({'status': 'completed'})}\n\n"
+                stream_successful = True
+                break
+
+        except Exception as e:
+            logger.warning("Streaming with model '%s' failed: %s", candidate, e)
+            last_error = e
+            # If tokens were already partially yielded to the client, we cannot cleanly switch models mid-stream
+            if token_emitted:
+                break
+            continue
+
+    if not stream_successful:
+        err_msg = _format_error_detail(last_error) if last_error else "An error occurred during response generation."
+        logger.error("Streaming generation failed across candidates: %s", last_error or "No chunks produced")
+        yield f"event: error\ndata: {json.dumps({'detail': err_msg})}\n\n"
+

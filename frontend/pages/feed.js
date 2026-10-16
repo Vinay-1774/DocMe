@@ -47,6 +47,77 @@ async function initFeedPage() {
     if (e.target === uploadModal) closeModal();
   });
 
+  // Delete Modal Controls
+  const deleteModal = document.getElementById('delete-doc-modal');
+  const closeDeleteModalBtn = document.getElementById('close-delete-modal-btn');
+  const cancelDeleteBtn = document.getElementById('cancel-delete-btn');
+  const confirmDeleteBtn = document.getElementById('confirm-delete-btn');
+  const deleteDocTitleDisplay = document.getElementById('delete-doc-title-display');
+  const deleteModalAlert = document.getElementById('delete-modal-alert');
+  const deleteBtnText = document.getElementById('delete-btn-text');
+  const deleteBtnSpinner = document.getElementById('delete-btn-spinner');
+  let pendingDeleteDocId = null;
+  let pendingDeleteDocTitle = '';
+
+  const openDeleteModal = (docId, docTitle) => {
+    pendingDeleteDocId = docId;
+    pendingDeleteDocTitle = docTitle;
+    if (deleteDocTitleDisplay) deleteDocTitleDisplay.textContent = `"${docTitle}"`;
+    if (deleteModalAlert) deleteModalAlert.style.display = 'none';
+    if (confirmDeleteBtn) confirmDeleteBtn.disabled = false;
+    if (cancelDeleteBtn) cancelDeleteBtn.disabled = false;
+    if (deleteBtnText) deleteBtnText.textContent = 'Delete Document';
+    if (deleteBtnSpinner) deleteBtnSpinner.style.display = 'none';
+    if (deleteModal) deleteModal.style.display = 'flex';
+  };
+
+  const closeDeleteModal = () => {
+    if (deleteModal) deleteModal.style.display = 'none';
+    pendingDeleteDocId = null;
+    pendingDeleteDocTitle = '';
+  };
+
+  closeDeleteModalBtn?.addEventListener('click', closeDeleteModal);
+  cancelDeleteBtn?.addEventListener('click', closeDeleteModal);
+  deleteModal?.addEventListener('click', (e) => {
+    if (e.target === deleteModal) closeDeleteModal();
+  });
+
+  confirmDeleteBtn?.addEventListener('click', async () => {
+    if (!pendingDeleteDocId) return;
+
+    confirmDeleteBtn.disabled = true;
+    cancelDeleteBtn.disabled = true;
+    if (deleteBtnText) deleteBtnText.textContent = 'Deleting...';
+    if (deleteBtnSpinner) deleteBtnSpinner.style.display = 'inline-block';
+    if (deleteModalAlert) deleteModalAlert.style.display = 'none';
+
+    try {
+      await api.deleteDocument(pendingDeleteDocId);
+      const title = pendingDeleteDocTitle;
+      closeDeleteModal();
+      showFeedAlert(`Document "${title}" deleted successfully.`, 'success');
+      loadFeed();
+    } catch (err) {
+      if (deleteModalAlert) {
+        deleteModalAlert.textContent = err?.message || 'Could not delete document. Please try again.';
+        deleteModalAlert.style.display = 'block';
+      }
+    } finally {
+      if (confirmDeleteBtn) confirmDeleteBtn.disabled = false;
+      if (cancelDeleteBtn) cancelDeleteBtn.disabled = false;
+      if (deleteBtnText) deleteBtnText.textContent = 'Delete Document';
+      if (deleteBtnSpinner) deleteBtnSpinner.style.display = 'none';
+    }
+  });
+
+  document.addEventListener('keydown', (e) => {
+    if (e.key === 'Escape') {
+      if (uploadModal && uploadModal.style.display === 'flex') closeModal();
+      if (deleteModal && deleteModal.style.display === 'flex') closeDeleteModal();
+    }
+  });
+
   // Handle Document Upload (Upload once and persist embeddings)
   uploadForm?.addEventListener('submit', async (e) => {
     e.preventDefault();
@@ -312,6 +383,8 @@ async function initFeedPage() {
       day: 'numeric',
     });
 
+    const currentUser = getUser();
+    const isOwner = currentUser && (String(currentUser.id) === String(doc.user_id));
     const isPdf = (doc.file_type || '').toLowerCase() === 'pdf';
     const formatBadgeClass = isPdf ? 'badge-pdf' : 'badge-docx';
     const formatLabel = (doc.file_type || 'DOC').toUpperCase();
@@ -358,6 +431,16 @@ async function initFeedPage() {
           </button>
         </div>
         <div class="actions-right">
+          ${isOwner ? `
+          <button type="button" class="btn btn-outline-danger btn-sm delete-doc-btn" data-doc-id="${doc.id}" data-doc-title="${escapeHtml(doc.title)}" title="Delete document">
+            <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2">
+              <polyline points="3 6 5 6 21 6"></polyline>
+              <path d="M19 6v14a2 2 0 0 1-2 2H7a2 2 0 0 1-2-2V6m3 0V4a2 2 0 0 1 2-2h4a2 2 0 0 1 2 2v2"></path>
+              <line x1="10" y1="11" x2="10" y2="17"></line>
+              <line x1="14" y1="11" x2="14" y2="17"></line>
+            </svg>
+            <span>Delete</span>
+          </button>` : ''}
           <button type="button" class="btn btn-ghost btn-sm toggle-comments-btn" data-doc-id="${doc.id}">
             <svg width="15" height="15" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2">
               <path d="M21 11.5a8.38 8.38 0 0 1-.9 3.8 8.5 8.5 0 0 1-7.6 4.7 8.38 8.38 0 0 1-3.8-.9L3 21l1.9-5.7a8.38 8.38 0 0 1-.9-3.8 8.5 8.5 0 0 1 4.7-7.6 8.38 8.38 0 0 1 3.8-.9h.5a8.48 8.48 0 0 1 8 8v.5z"></path>
@@ -391,6 +474,12 @@ async function initFeedPage() {
       } finally {
         downloadBtn.disabled = false;
       }
+    });
+
+    // Delete Button Listener
+    const deleteBtn = card.querySelector('.delete-doc-btn');
+    deleteBtn?.addEventListener('click', () => {
+      openDeleteModal(doc.id, doc.title);
     });
 
     // Comments Toggle Button Listener

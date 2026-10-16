@@ -5,6 +5,10 @@
   <meta name="viewport" content="width=device-width, initial-scale=1.0">
   <meta name="description" content="View and manage your research papers, privacy settings, and document analytics.">
   <title>My Workspace &amp; Profile — Research Platform</title>
+  <link rel="icon" type="image/x-icon" href="../favicon.ico">
+  <link rel="icon" type="image/png" sizes="32x32" href="../favicon-32x32.png">
+  <link rel="icon" type="image/png" sizes="16x16" href="../favicon-16x16.png">
+  <link rel="apple-touch-icon" sizes="180x180" href="../apple-touch-icon.png">
   <link rel="stylesheet" href="../shared/components.css">
   <link rel="stylesheet" href="feed.css">
   <link rel="stylesheet" href="profile.css">
@@ -14,14 +18,8 @@
   <header class="main-nav" role="banner">
     <div class="nav-container">
       <div class="nav-left">
-        <a href="feed.html" class="brand-badge">
-          <div class="brand-logo-icon">
-            <svg width="20" height="20" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.2">
-              <path d="M4 19.5A2.5 2.5 0 0 1 6.5 17H20"></path>
-              <path d="M6.5 2H20v20H6.5A2.5 2.5 0 0 1 4 19.5v-15A2.5 2.5 0 0 1 6.5 2z"></path>
-            </svg>
-          </div>
-          <span>Research Platform</span>
+        <a href="feed.html" class="brand-badge" aria-label="DocMe Home">
+          <img src="../assets/logo.png" alt="DocMe — Your Research Companion" class="brand-logo-img" height="36">
         </a>
         <nav aria-label="Main Navigation">
           <ul class="nav-menu">
@@ -157,6 +155,100 @@
     </div>
   </div>
 
-  <script type="module" src="profile.js"></script>
+  <!-- Delete Document Confirmation Modal -->
+  <div id="delete-doc-modal" class="modal-overlay" style="display: none;" role="dialog" aria-modal="true" aria-labelledby="delete-modal-heading">
+    <div class="modal-dialog" style="max-width: 440px;">
+      <div class="modal-header">
+        <h2 id="delete-modal-heading" class="modal-title" style="color: var(--danger);">Delete Document</h2>
+        <button type="button" id="close-delete-modal-btn" class="modal-close-btn" aria-label="Close dialog">
+          <svg width="20" height="20" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2">
+            <line x1="18" y1="6" x2="6" y2="18"></line>
+            <line x1="6" y1="6" x2="18" y2="18"></line>
+          </svg>
+        </button>
+      </div>
+
+      <div class="modal-body">
+        <div id="delete-modal-alert" class="alert alert-error" style="display: none;" role="alert"></div>
+        <p style="margin-bottom: 0.75rem; color: var(--text-primary); font-size: 0.9375rem;">
+          Are you sure you want to delete <strong id="delete-doc-title-display">this document</strong>?
+        </p>
+        <p style="color: var(--text-secondary); font-size: 0.875rem; line-height: 1.5;">
+          This action cannot be undone. The document and its associated comments will be permanently deleted.
+        </p>
+      </div>
+
+      <div class="modal-footer">
+        <button type="button" id="cancel-delete-btn" class="btn btn-secondary btn-sm">Cancel</button>
+        <button type="button" id="confirm-delete-btn" class="btn btn-danger btn-sm">
+          <span id="delete-btn-text">Delete Document</span>
+          <span id="delete-btn-spinner" class="spinner" style="display: none;" aria-hidden="true"></span>
+        </button>
+      </div>
+    </div>
+  </div>
+
+  <!-- Upload Document Modal -->
+  <div id="upload-modal" class="modal-overlay" style="display: none;" role="dialog" aria-modal="true" aria-labelledby="upload-modal-heading">
+    <div class="modal-dialog">
+      <div class="modal-header">
+        <h2 id="upload-modal-heading" class="modal-title">Upload Document</h2>
+        <button type="button" id="close-upload-modal-btn" class="modal-close-btn" aria-label="Close dialog">
+          <svg width="20" height="20" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2">
+            <line x1="18" y1="6" x2="6" y2="18"></line>
+            <line x1="6" y1="6" x2="18" y2="18"></line>
+          </svg>
+        </button>
+      </div>
+
+      <form id="upload-form" novalidate>
+        <div class="modal-body">
+          <div id="upload-alert" class="alert alert-error" style="display: none;" role="alert"></div>
+
+          <div class="form-group">
+            <label for="doc-title" class="form-label">
+              <span>Title <span class="required-indicator">*</span></span>
+            </label>
+            <input type="text" id="doc-title" name="title" class="form-input" placeholder="Document title" required>
+          </div>
+
+          <div class="form-group">
+            <label for="doc-desc" class="form-label">
+              <span>Description</span>
+            </label>
+            <textarea id="doc-desc" name="description" class="form-textarea" placeholder="Brief description of the document"></textarea>
+          </div>
+
+          <div class="form-group">
+            <label for="doc-visibility" class="form-label">
+              <span>Visibility <span class="required-indicator">*</span></span>
+            </label>
+            <select id="doc-visibility" name="visibility" class="form-select">
+              <option value="public" selected>Public (Anyone can view and discuss)</option>
+              <option value="private">Private (Only you can access)</option>
+            </select>
+          </div>
+
+          <div class="form-group">
+            <label for="doc-file" class="form-label">
+              <span>File (.pdf or .docx) <span class="required-indicator">*</span></span>
+            </label>
+            <input type="file" id="doc-file" name="file" accept=".pdf,.docx" class="form-input file-input" required>
+            <p class="form-helper">Supported formats: PDF (.pdf) and Word (.docx).</p>
+          </div>
+        </div>
+
+        <div class="modal-footer">
+          <button type="button" id="cancel-upload-btn" class="btn btn-secondary btn-sm">Cancel</button>
+          <button type="submit" id="submit-upload-btn" class="btn btn-primary btn-sm">
+            <span id="upload-btn-text">Upload</span>
+            <span id="upload-btn-spinner" class="spinner" style="display: none;" aria-hidden="true"></span>
+          </button>
+        </div>
+      </form>
+    </div>
+  </div>
+
+  <script type="module" src="profile.js?v=2"></script>
 </body>
 </html>

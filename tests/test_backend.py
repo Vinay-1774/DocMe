@@ -1534,4 +1534,186 @@ def test_document_download_inline_pdf_and_permissions(client):
     assert kyle_dl.status_code == 200
 
 
+def test_document_deletion_scenarios(client):
+    """
+    Verifies end-to-end document deletion backend scenarios:
+    1. Authorized user can delete their own document.
+    2. Associated chunks, embeddings, comments, and file on disk are cleaned up.
+    3. Unauthorized user cannot delete another user's document (403 for public, 404 for private).
+    4. Deleting a nonexistent or already deleted document returns 404 Not Found.
+    5. Unauthenticated delete requests return 401 Unauthorized.
+    6. File deduplication safety: shared file on disk is preserved if another document references it.
+    """
+    client.post("/register", json={"username": "del_owner", "email": "del_owner@example.com", "password": "password123"})
+    tok_owner = client.post("/login", json={"email": "del_owner@example.com", "password": "password123"}).json()["access_token"]
+
+    client.post("/register", json={"username": "del_other", "email": "del_other@example.com", "password": "password123"})
+    tok_other = client.post("/login", json={"email": "del_other@example.com", "password": "password123"}).json()["access_token"]
+
+    # 1. Unauthenticated deletion attempts return 401
+    unauth_res = client.delete("/documents/999999")
+    assert unauth_res.status_code == 401
+
+    # 2. Deleting nonexistent document returns 404
+    nonexistent_res = client.delete(
+        "/documents/999999",
+        headers={"Authorization": f"Bearer {tok_owner}"},
+    )
+    assert nonexistent_res.status_code == 404
+
+    # 3. Create a public document and a private document owned by owner
+    with patch("backend.app.ingestion.generate_embedding", side_effect=mock_generate_embedding), \
+         patch("backend.app.ingestion.generate_embeddings", side_effect=mock_generate_embeddings), \
+         patch("backend.app.ingestion.extract_text_and_metadata", return_value=[{"text": "Owner doc content", "page_number": 1}]):
+        pub_res = client.post(
+            "/documents",
+            headers={"Authorization": f"Bearer {tok_owner}"},
+            data={"title": "Public Deletion Test Doc", "visibility": "public"},
+            files={"file": ("public_test.docx", create_sample_docx_bytes("Owner doc content"), "application/vnd.openxmlformats-officedocument.wordprocessingml.document")},
+        )
+        assert pub_res.status_code == 201
+        pub_doc_id = pub_res.json()["id"]
+
+        priv_res = client.post(
+            "/documents",
+            headers={"Authorization": f"Bearer {tok_owner}"},
+            data={"title": "Private Deletion Test Doc", "visibility": "private"},
+            files={"file": ("private_test.docx", create_sample_docx_bytes("Private secret"), "application/vnd.openxmlformats-officedocument.wordprocessingml.document")},
+        )
+        assert priv_res.status_code == 201
+        priv_doc_id = priv_res.json()["id"]
+
+    # Add a comment to the public document
+    comment_res = client.post(
+        f"/documents/{pub_doc_id}/comments",
+        headers={"Authorization": f"Bearer {tok_other}"},
+        json={"content": "Great research document!"},
+    )
+    assert comment_res.status_code == 201
+
+    # Verify document, chunks, and comments exist in DB and file exists on disk
+    with TestSessionLocal() as db:
+        doc = db.query(Document).filter(Document.id == pub_doc_id).first()
+        assert doc is not None
+        file_path = doc.file_path
+        assert os.path.exists(file_path)
+
+        chunks_count = db.query(DocumentChunk).filter(DocumentChunk.document_id == pub_doc_id).count()
+        assert chunks_count > 0
+
+        comments_count = db.query(Comment).filter(Comment.document_id == pub_doc_id).count()
+        assert comments_count > 0
+
+    # 4. Unauthorized user cannot delete owner's public document -> 403 Forbidden
+    other_pub_del = client.delete(
+        f"/documents/{pub_doc_id}",
+        headers={"Authorization": f"Bearer {tok_other}"},
+    )
+    assert other_pub_del.status_code == 403
+
+    # 5. Unauthorized user cannot delete owner's private document -> 404 Not Found (privacy convention)
+    other_priv_del = client.delete(
+        f"/documents/{priv_doc_id}",
+        headers={"Authorization": f"Bearer {tok_other}"},
+    )
+    assert other_priv_del.status_code == 404
+
+    # 6. Authorized owner deletes their public document -> 200 OK
+    owner_pub_del = client.delete(
+        f"/documents/{pub_doc_id}",
+        headers={"Authorization": f"Bearer {tok_owner}"},
+    )
+    assert owner_pub_del.status_code == 200
+    assert "deleted successfully" in owner_pub_del.json()["message"].lower()
+
+    # Verify DB record, chunks, comments, and disk file are removed
+    with TestSessionLocal() as db:
+        assert db.query(Document).filter(Document.id == pub_doc_id).first() is None
+        assert db.query(DocumentChunk).filter(DocumentChunk.document_id == pub_doc_id).count() == 0
+        assert db.query(Comment).filter(Comment.document_id == pub_doc_id).count() == 0
+    assert not os.path.exists(file_path)
+
+    # 7. Repeated deletion of the same document -> 404 Not Found
+    repeat_del = client.delete(
+        f"/documents/{pub_doc_id}",
+        headers={"Authorization": f"Bearer {tok_owner}"},
+    )
+    assert repeat_del.status_code == 404
+
+    # 8. Test alias /api/documents/{document_id}
+    api_alias_del = client.delete(
+        f"/api/documents/{priv_doc_id}",
+        headers={"Authorization": f"Bearer {tok_owner}"},
+    )
+    assert api_alias_del.status_code == 200
+    with TestSessionLocal() as db:
+        assert db.query(Document).filter(Document.id == priv_doc_id).first() is None
+
+
+def test_document_deletion_deduplication_preserves_file(client):
+    """
+    Verifies that when multiple document records share the same uploaded file
+    via hash-based storage, deleting one document preserves the file on disk
+    until the last referencing document is deleted.
+    """
+    client.post("/register", json={"username": "dedup_u1", "email": "dedup_u1@example.com", "password": "password123"})
+    tok_u1 = client.post("/login", json={"email": "dedup_u1@example.com", "password": "password123"}).json()["access_token"]
+
+    client.post("/register", json={"username": "dedup_u2", "email": "dedup_u2@example.com", "password": "password123"})
+    tok_u2 = client.post("/login", json={"email": "dedup_u2@example.com", "password": "password123"}).json()["access_token"]
+
+    shared_content = "Identical research document content for deduplication test"
+    raw_docx_bytes = create_sample_docx_bytes(shared_content).getvalue()
+
+    with patch("backend.app.ingestion.generate_embedding", side_effect=mock_generate_embedding), \
+         patch("backend.app.ingestion.generate_embeddings", side_effect=mock_generate_embeddings), \
+         patch("backend.app.ingestion.extract_text_and_metadata", return_value=[{"text": shared_content, "page_number": 1}]):
+        res1 = client.post(
+            "/documents",
+            headers={"Authorization": f"Bearer {tok_u1}"},
+            data={"title": "Shared Doc 1", "visibility": "public"},
+            files={"file": ("shared.docx", raw_docx_bytes, "application/vnd.openxmlformats-officedocument.wordprocessingml.document")},
+        )
+        assert res1.status_code == 201
+        doc1_id = res1.json()["id"]
+
+        res2 = client.post(
+            "/documents",
+            headers={"Authorization": f"Bearer {tok_u2}"},
+            data={"title": "Shared Doc 2", "visibility": "public"},
+            files={"file": ("shared.docx", raw_docx_bytes, "application/vnd.openxmlformats-officedocument.wordprocessingml.document")},
+        )
+        assert res2.status_code == 201
+        doc2_id = res2.json()["id"]
+
+    # Explicitly set d2 to share d1's file path to test file-preservation safeguard
+    with TestSessionLocal() as db:
+        d1 = db.query(Document).filter(Document.id == doc1_id).first()
+        d2 = db.query(Document).filter(Document.id == doc2_id).first()
+        assert d1 is not None and d2 is not None
+        # Remove d2's temporary file on disk and point d2 to d1's file
+        if os.path.exists(d2.file_path) and d2.file_path != d1.file_path:
+            os.unlink(d2.file_path)
+        d2.file_path = d1.file_path
+        db.commit()
+        shared_file_path = d1.file_path
+        assert os.path.exists(shared_file_path)
+
+    # Delete doc1 (by user 1)
+    del1 = client.delete(f"/documents/{doc1_id}", headers={"Authorization": f"Bearer {tok_u1}"})
+    assert del1.status_code == 200
+
+    # File on disk MUST still exist because doc2 references it
+    assert os.path.exists(shared_file_path)
+
+    # Delete doc2 (by user 2)
+    del2 = client.delete(f"/documents/{doc2_id}", headers={"Authorization": f"Bearer {tok_u2}"})
+    assert del2.status_code == 200
+
+    # Now that no document references it, file on disk MUST be removed
+    assert not os.path.exists(shared_file_path)
+
+
+
+
 

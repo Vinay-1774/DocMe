@@ -134,3 +134,8 @@ class UserRankingResponse(BaseModel):
     document_count: int
 
     model_config = ConfigDict(from_attributes=True)
+
+
+class MessageResponse(BaseModel):
+    message: str
+    id: Optional[int] = None
