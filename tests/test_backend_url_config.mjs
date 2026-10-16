@@ -250,8 +250,22 @@ async function runConfigTests() {
   }
   console.log('  PASSED (Zero backend secrets in frontend assets)');
 
-  // Test 14: Reset build back to local development defaults
-  console.log('Test 14: Clean build reset back to local development defaults');
+  // Test 14: Build execution from frontend subdirectory (Vercel Root Directory = frontend)
+  console.log('Test 14: Build execution from frontend subdirectory');
+  execSync(`npm run build`, {
+    cwd: path.join(projectRoot, 'frontend'),
+    env: { ...process.env, DOCME_API_URL: testRenderUrl, VERCEL: '1' },
+    stdio: 'pipe',
+  });
+  const subEnvContent = fs.readFileSync(path.join(projectRoot, 'frontend/shared/env.js'), 'utf8');
+  assert.ok(
+    subEnvContent.includes(`DOCME_API_URL: "${testRenderUrl}"`),
+    'env.js must be updated even when build is executed from frontend/ directory'
+  );
+  console.log('  PASSED (Works seamlessly when Vercel Root Directory is set to frontend)');
+
+  // Test 15: Reset build back to local development defaults
+  console.log('Test 15: Clean build reset back to local development defaults');
   execSync(`node scripts/build.js --clean`, {
     cwd: projectRoot,
     stdio: 'pipe',

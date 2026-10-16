@@ -1,0 +1,15 @@
+{
+  "buildCommand": "npm run build",
+  "cleanUrls": true,
+  "headers": [
+    {
+      "source": "/shared/env.js",
+      "headers": [
+        {
+          "key": "Cache-Control",
+          "value": "no-cache, no-store, must-revalidate"
+        }
+      ]
+    }
+  ]
+}
