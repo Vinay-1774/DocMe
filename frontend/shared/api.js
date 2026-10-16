@@ -5,42 +5,186 @@
  */
 
 import { getToken, setToken, clearAuth, isTokenExpired } from './auth.js';
+import { ENV_CONFIG } from './env.js';
 
 /**
- * Computes the default API base URL, aligning hostname with window.location
- * to prevent cross-site cookie isolation between localhost and 127.0.0.1.
+ * Trims whitespace and strips any trailing slashes from an API URL.
+ */
+function sanitizeApiUrl(url) {
+  if (!url || typeof url !== 'string') return '';
+  return url.trim().replace(/\/+$/, '');
+}
+
+/**
+ * Validates whether a candidate string is a valid HTTP/HTTPS URL.
+ */
+function isValidHttpUrl(url) {
+  if (!url || typeof url !== 'string') return false;
+  try {
+    const parsed = new URL(url);
+    return parsed.protocol === 'http:' || parsed.protocol === 'https:';
+  } catch {
+    return false;
+  }
+}
+
+/**
+ * Checks whether an API URL points to a local address (localhost, 127.0.0.1, 0.0.0.0).
+ */
+function isLocalAddress(url) {
+  if (!url || typeof url !== 'string') return false;
+  try {
+    const parsed = new URL(url);
+    return parsed.hostname === 'localhost' || parsed.hostname === '127.0.0.1' || parsed.hostname === '0.0.0.0';
+  } catch {
+    return false;
+  }
+}
+
+/**
+ * Renders a persistent, highly visible configuration alert in the DOM if
+ * the backend URL is missing or misconfigured in production.
+ */
+function displayConfigErrorNotice(message) {
+  if (typeof document === 'undefined') return;
+  const showNotice = () => {
+    if (document.getElementById('docme-config-error-banner')) return;
+    const banner = document.createElement('div');
+    banner.id = 'docme-config-error-banner';
+    banner.setAttribute('role', 'alert');
+    banner.style.cssText =
+      'position:fixed;top:0;left:0;right:0;z-index:999999;background:#b91c1c;color:#ffffff;' +
+      'padding:14px 20px;font-family:-apple-system,BlinkMacSystemFont,"Segoe UI",Roboto,sans-serif;' +
+      'font-size:14px;font-weight:500;text-align:center;box-shadow:0 2px 10px rgba(0,0,0,0.25);' +
+      'display:flex;align-items:center;justify-content:center;gap:10px;line-height:1.4;';
+    banner.innerHTML = `
+      <svg width="20" height="20" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" style="flex-shrink:0;">
+        <path d="M10.29 3.86L1.82 18a2 2 0 0 0 1.71 3h16.94a2 2 0 0 0 1.71-3L13.71 3.86a2 2 0 0 0-3.42 0z"></path>
+        <line x1="12" y1="9" x2="12" y2="13"></line>
+        <line x1="12" y1="17" x2="12.01" y2="17"></line>
+      </svg>
+      <span><strong>Configuration Error:</strong> ${message}</span>
+    `;
+    if (document.body) {
+      document.body.prepend(banner);
+    } else {
+      document.addEventListener('DOMContentLoaded', () => {
+        if (document.body) document.body.prepend(banner);
+      });
+    }
+  };
+
+  if (document.readyState === 'loading') {
+    document.addEventListener('DOMContentLoaded', showNotice);
+  } else {
+    showNotice();
+  }
+}
+
+/**
+ * Computes the default API base URL.
+ * 1. Checks build-injected environment configuration (ENV_CONFIG.DOCME_API_URL).
+ * 2. Checks window overrides (window.DOCME_API_URL / window.RESEARCH_API_URL).
+ * 3. Checks HTML document meta tags (<meta name="docme-api-url">).
+ * 4. Checks localStorage overrides.
+ * 5. In local development (localhost / 127.0.0.1), aligns hostname and defaults to port 8000.
+ * 6. In production builds, refuses to silently fall back to localhost/127.0.0.1 and raises
+ *    a clear configuration error when the backend URL is missing or invalid.
  */
 export function getDefaultApiBaseUrl() {
-  if (typeof window !== 'undefined') {
-    if (window.DOCME_API_URL) return window.DOCME_API_URL.replace(/\/+$/, '');
-    if (window.RESEARCH_API_URL) return window.RESEARCH_API_URL.replace(/\/+$/, '');
+  let candidate = '';
+
+  // 1. Build-time injected configuration (from Vercel DOCME_API_URL)
+  if (typeof ENV_CONFIG !== 'undefined' && ENV_CONFIG?.DOCME_API_URL) {
+    candidate = sanitizeApiUrl(ENV_CONFIG.DOCME_API_URL);
+  }
+
+  // 2. Window variable overrides
+  if (!candidate && typeof window !== 'undefined') {
+    if (window.DOCME_API_URL) candidate = sanitizeApiUrl(window.DOCME_API_URL);
+    else if (window.RESEARCH_API_URL) candidate = sanitizeApiUrl(window.RESEARCH_API_URL);
+  }
+
+  // 3. Document meta tags
+  if (!candidate && typeof document !== 'undefined') {
     try {
       const meta =
         document.querySelector('meta[name="docme-api-url"]') ||
         document.querySelector('meta[name="research-api-url"]');
-      if (meta && meta.content) return meta.content.trim().replace(/\/+$/, '');
+      if (meta && meta.content && meta.content.trim()) {
+        candidate = sanitizeApiUrl(meta.content);
+      }
     } catch {
       // DOM access restricted
     }
+  }
+
+  // 4. LocalStorage overrides
+  if (!candidate && typeof window !== 'undefined') {
     try {
       const stored =
         localStorage.getItem('DOCME_API_URL') ||
         localStorage.getItem('RESEARCH_API_URL');
-      if (stored) return stored.trim().replace(/\/+$/, '');
+      if (stored && stored.trim()) {
+        candidate = sanitizeApiUrl(stored);
+      }
     } catch {
       // Storage restricted
     }
-    if (window.location && window.location.hostname) {
-      const proto = window.location.protocol || 'http:';
-      const host = window.location.hostname;
-      if (window.location.port === '8000') {
-        return window.location.origin;
-      }
-      if (host === 'localhost' || host === '127.0.0.1') {
-        return `${proto}//${host}:8000`;
-      }
-    }
   }
+
+  const isBrowser = typeof window !== 'undefined' && Boolean(window.location);
+  const host = isBrowser ? window.location.hostname : '';
+  const isRemoteHost = Boolean(
+    host &&
+    host !== 'localhost' &&
+    host !== '127.0.0.1' &&
+    host !== '0.0.0.0'
+  );
+
+  // If a candidate URL was found, validate it
+  if (candidate) {
+    if (!isValidHttpUrl(candidate)) {
+      const errorMsg = `Invalid backend API URL format: "${candidate}". Must start with http:// or https://.`;
+      console.error(`[DocMe] ${errorMsg}`);
+      displayConfigErrorNotice(errorMsg);
+      throw new Error(`DocMe Configuration Error: ${errorMsg}`);
+    }
+
+    if (isRemoteHost && isLocalAddress(candidate)) {
+      const errorMsg =
+        `Production deployment on "${host}" cannot connect to a local address ("${candidate}"). ` +
+        'Please configure DOCME_API_URL in your Vercel Project Settings with your public Render backend URL.';
+      console.error(`[DocMe] ${errorMsg}`);
+      displayConfigErrorNotice(errorMsg);
+      throw new Error(`DocMe Configuration Error: ${errorMsg}`);
+    }
+
+    return candidate;
+  }
+
+  // 5. Localhost / local development fallback
+  if (isBrowser) {
+    const proto = window.location.protocol || 'http:';
+    if (window.location.port === '8000') {
+      return window.location.origin;
+    }
+    if (host === 'localhost' || host === '127.0.0.1') {
+      return `${proto}//${host}:8000`;
+    }
+
+    // 6. Production host without configured API URL
+    // DO NOT silently fall back to localhost / 127.0.0.1!
+    const errorMsg =
+      `Backend API URL is not configured for host "${host}". ` +
+      'Please configure DOCME_API_URL in your Vercel Project Settings (Environment Variables) ' +
+      'with your Render backend URL (e.g., https://your-backend.onrender.com) and redeploy.';
+    console.error(`[DocMe] ${errorMsg}`);
+    displayConfigErrorNotice(errorMsg);
+    throw new Error(`DocMe Configuration Error: ${errorMsg}`);
+  }
+
+  // Non-browser / Node.js test environment default
   return 'http://127.0.0.1:8000';
 }
 

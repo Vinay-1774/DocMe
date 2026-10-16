@@ -1,5 +1,17 @@
 {
+  "buildCommand": "node scripts/build.js",
   "cleanUrls": true,
+  "headers": [
+    {
+      "source": "/shared/env.js",
+      "headers": [
+        {
+          "key": "Cache-Control",
+          "value": "no-cache, no-store, must-revalidate"
+        }
+      ]
+    }
+  ],
   "rewrites": [
     {
       "source": "/",

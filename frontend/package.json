@@ -1,5 +1,11 @@
 {
   "name": "docme-frontend",
   "private": true,
-  "type": "module"
+  "type": "module",
+  "scripts": {
+    "build": "node ../scripts/build.js",
+    "build:prod": "node ../scripts/build.js --prod",
+    "build:clean": "node ../scripts/build.js --clean"
+  }
 }
+
