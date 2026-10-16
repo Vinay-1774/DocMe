@@ -1,18 +1,37 @@
+# ==============================================================================
+# DocMe — Backend Dependencies (requirements.txt)
+# Production and testing dependencies for FastAPI, PostgreSQL/pgvector, and AI
+# ==============================================================================
+
+# Web Framework & ASGI Server
 fastapi>=0.115.0
 uvicorn>=0.30.0
+python-multipart>=0.0.9
+
+# Validation & Data Models
 pydantic>=2.7.0
 email-validator>=2.0.0
+
+# Database, ORM & Vector Search (PostgreSQL / Supabase pgvector)
 SQLAlchemy>=2.0.0
 psycopg[binary]>=3.2.0
 pgvector>=0.3.0
-python-dotenv>=1.0.0
-pyjwt>=2.8.0
+
+# Authentication, Hashing & Environment
+PyJWT>=2.8.0
 bcrypt>=4.0.0
-pypdf>=5.0.0
-python-docx>=1.1.0
+cryptography>=42.0.0
+python-dotenv>=1.0.0
+
+# AI, LLM, Embeddings & Graph Orchestration
 google-generativeai>=0.8.0
 langgraph>=0.2.0
 langsmith>=0.1.0
-python-multipart>=0.0.9
+
+# Document Parsing & Ingestion (PDF / DOCX)
+pypdf>=5.0.0
+python-docx>=1.1.0
+
+# Automated Testing & HTTP Client
 pytest>=8.0.0
 httpx>=0.27.0
