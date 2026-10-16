@@ -264,8 +264,18 @@ async function runConfigTests() {
   );
   console.log('  PASSED (Works seamlessly when Vercel Root Directory is set to frontend)');
 
-  // Test 15: Reset build back to local development defaults
-  console.log('Test 15: Clean build reset back to local development defaults');
+  // Test 15: Vercel deployment configuration integrity
+  console.log('Test 15: Vercel deployment configuration integrity');
+  const vercelJson = JSON.parse(fs.readFileSync(path.join(projectRoot, 'vercel.json'), 'utf8'));
+  assert.strictEqual(vercelJson.outputDirectory, 'frontend', 'outputDirectory must be "frontend"');
+  assert.strictEqual(vercelJson.buildCommand, 'npm run build', 'buildCommand must be "npm run build"');
+  assert.strictEqual(vercelJson.cleanUrls, true, 'cleanUrls must be true');
+  assert.ok(Array.isArray(vercelJson.headers), 'headers must be configured');
+  assert.strictEqual(vercelJson.rewrites, undefined, 'Obsolete rewrites mapping to /frontend/... must be removed');
+  console.log('  PASSED (vercel.json correctly configured for outputDirectory: frontend)');
+
+  // Test 16: Reset build back to local development defaults
+  console.log('Test 16: Clean build reset back to local development defaults');
   execSync(`node scripts/build.js --clean`, {
     cwd: projectRoot,
     stdio: 'pipe',
