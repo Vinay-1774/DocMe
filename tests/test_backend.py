@@ -1850,6 +1850,28 @@ def test_cross_domain_cookie_attributes_for_production(client):
         config.COOKIE_SAMESITE = orig_samesite
 
 
+def test_lifespan_invokes_init_db():
+    """
+    Verifies that the FastAPI lifespan context manager calls init_db() on startup.
+    """
+    with patch("backend.app.main.init_db") as mock_init:
+        with TestClient(app):
+            pass
+        mock_init.assert_called_once()
+
+
+def test_lifespan_fails_startup_on_db_error():
+    """
+    Verifies that if init_db() raises an error during startup, the application
+    fails startup immediately by raising RuntimeError, preventing silent failures.
+    """
+    with patch("backend.app.main.init_db", side_effect=Exception("Database unreachable")):
+        with pytest.raises(RuntimeError, match="Database initialization failed"):
+            with TestClient(app):
+                pass
+
+
+
 
 
 

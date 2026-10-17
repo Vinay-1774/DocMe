@@ -1,6 +1,7 @@
 import logging
 import os
 import shutil
+from contextlib import asynccontextmanager
 from uuid import uuid4
 from typing import List, Literal, Optional
 
@@ -26,7 +27,7 @@ from .config import (
 )
 
 # Database dependency and models
-from .database import get_db
+from .database import get_db, init_db
 from .models import Comment, Document, DocumentChunk, User
 from .schema import (
     ChatRequest,
@@ -73,11 +74,29 @@ from .workflow import qa_workflow
 from .semantic_search import generate_embedding, perform_semantic_search
 
 
+@asynccontextmanager
+async def lifespan(app: FastAPI):
+    """
+    FastAPI lifespan context manager for application startup and shutdown.
+    Ensures required database tables and extensions are initialized once at startup.
+    Fails startup with an explicit error if the database connection or table creation fails.
+    """
+    logger.info("Initializing database schema on startup...")
+    try:
+        init_db()
+        logger.info("Database schema initialized successfully.")
+    except Exception as exc:
+        logger.critical("Fatal: Failed to initialize database schema: %s", exc, exc_info=True)
+        raise RuntimeError(f"Database initialization failed: {exc}") from exc
+    yield
+
+
 # Initialize FastAPI application
 app = FastAPI(
     title="Research Platform API",
     description="Backend API for research document management, Q&A, and discussion platform.",
     version="1.0.0",
+    lifespan=lifespan,
 )
 
 # Configure CORS using centralized project settings
