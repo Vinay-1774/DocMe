@@ -225,6 +225,18 @@ def request_otp(
     )
 
 
+@app.post("/auth/otp/resend", response_model=OTPResponse)
+def resend_otp(
+    payload: OTPRequest,
+    db: Session = Depends(get_db),
+):
+    """
+    Explicit endpoint for requesting a fresh OTP verification code.
+    Maintains identical server-side cooldown (30s), rate limiting, and security controls.
+    """
+    return request_otp(payload=payload, db=db)
+
+
 @app.post("/auth/otp/verify", response_model=OTPResponse)
 def verify_otp_endpoint(
     payload: OTPVerifyRequest,

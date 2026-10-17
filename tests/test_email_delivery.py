@@ -11,6 +11,7 @@ BASE_DIR = Path(__file__).resolve().parent.parent
 if str(BASE_DIR) not in sys.path:
     sys.path.insert(0, str(BASE_DIR))
 
+from tests.test_otp import client, db_session, override_get_db, setup_test_db, clean_otp_tables
 from backend.app import config
 from backend.app.email import (
     EmailDeliveryError,
@@ -198,3 +199,59 @@ def test_smtp_diagnostic_on_dns_failure(caplog):
             assert "SMTP DNS resolution FAILED" in caplog.text
             assert "Name or service not known" in str(exc_info.value)
             assert "123456" not in caplog.text
+
+
+def test_resend_timeout_handling():
+    """Verifies that Resend timeouts are handled safely without exposing secrets."""
+    with patch.object(config, "RESEND_API_KEY", "re_test_key"), \
+         patch("httpx.Client.post", side_effect=httpx.TimeoutException("Read timed out")):
+        with pytest.raises(EmailDeliveryError) as exc_info:
+            _send_via_resend("test@example.com", "123456", "registration", SAMPLE_SUBJECT, SAMPLE_TEXT, SAMPLE_HTML)
+        assert "timed out" in str(exc_info.value).lower()
+
+
+def test_resend_missing_key_handling():
+    """Verifies that missing RESEND_API_KEY raises a clean error."""
+    with patch.object(config, "RESEND_API_KEY", ""):
+        with pytest.raises(EmailDeliveryError) as exc_info:
+            _send_via_resend("test@example.com", "123456", "registration", SAMPLE_SUBJECT, SAMPLE_TEXT, SAMPLE_HTML)
+        assert "RESEND_API_KEY" in str(exc_info.value)
+
+
+def test_api_otp_resend_endpoint(client, db_session):
+    """Verifies that POST /auth/otp/resend works identically to /auth/otp/request."""
+    email = "resend_endpoint_test@example.com"
+    with patch("backend.app.main.send_otp_email", return_value=True):
+        resp = client.post(
+            "/auth/otp/resend",
+            json={"email": email, "purpose": "registration"},
+        )
+        assert resp.status_code == 200
+        assert resp.json()["status"] == "success"
+
+
+def test_unverified_account_re_registration_reissues_otp(client, db_session):
+    """Verifies that an unverified account can re-register with updated password and triggers a new OTP without crashing."""
+    email = "retry_unverified@example.com"
+    
+    with patch.object(config, "REQUIRE_EMAIL_VERIFICATION", True):
+        # First attempt: email delivery fails
+        with patch("backend.app.auth.send_otp_email", side_effect=EmailDeliveryError("Resend delivery error")):
+            resp1 = client.post(
+                "/register",
+                json={"username": "retryuser", "email": email, "password": "initial_password_1"},
+            )
+            # Server returns 503 honestly reporting account was created but email failed
+            assert resp1.status_code == 503
+            assert "User account created" in resp1.json()["detail"]
+
+        # Second attempt: user tries again with same email and new password, email succeeds
+        with patch("backend.app.auth.send_otp_email", return_value=True):
+            resp2 = client.post(
+                "/register",
+                json={"username": "retryuser", "email": email, "password": "new_password_2"},
+            )
+            assert resp2.status_code == 201
+            assert resp2.json()["email"] == email
+            assert resp2.json()["is_verified"] is False
+

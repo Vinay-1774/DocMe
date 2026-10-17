@@ -143,6 +143,14 @@ function initRegisterPage() {
     } catch (err) {
       setRegisterLoading(false);
       if (err instanceof ApiError) {
+        if (err.status === 503 && err.message.toLowerCase().includes('user account created')) {
+          pendingRegistration = { username, email, password };
+          showOtpScreen(email);
+          showAlert(err.message + ' Click "Resend Code" to retry delivery.', 'warning');
+          otpResendBtn.disabled = false;
+          resendCountdownText.textContent = '';
+          return;
+        }
         showAlert(err.message, 'error');
         if (err.status === 400) {
           if (err.message.toLowerCase().includes('email')) {
@@ -385,6 +393,19 @@ function initRegisterPage() {
       otpVerifyLabel.textContent = 'Verify & Continue';
       otpVerifySpinner.style.display = 'none';
     }
+  }
+
+  // Check URL parameters for direct verification flow (e.g. from login redirect)
+  const urlParams = new URLSearchParams(window.location.search);
+  const verifyParam = urlParams.get('verify');
+  const emailParam = urlParams.get('email');
+  if (verifyParam === 'true' && emailParam) {
+    const cleanEmail = emailParam.trim().toLowerCase();
+    pendingRegistration = { username: '', email: cleanEmail, password: '' };
+    showOtpScreen(cleanEmail);
+    otpResendBtn.disabled = false;
+    resendCountdownText.textContent = '';
+    showAlert('Please enter your 6-digit verification code below, or click "Resend Code" to request a new code.', 'info');
   }
 }
 

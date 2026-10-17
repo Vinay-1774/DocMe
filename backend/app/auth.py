@@ -116,12 +116,20 @@ def register_user(user_data: UserCreate, db: Session) -> User:
         )
     )
     if existing_user:
-        # Allow retry if account is still unverified and both username and email match
-        if (
-            not existing_user.is_verified
-            and existing_user.email == user_data.email
-            and existing_user.username == user_data.username
-        ):
+        # Allow retry if account is still unverified and email matches
+        if not existing_user.is_verified and existing_user.email == user_data.email:
+            # If the username is also changing, ensure it doesn't conflict with another user
+            if existing_user.username != user_data.username:
+                username_conflict = db.scalar(
+                    select(User).where(User.username == user_data.username, User.id != existing_user.id)
+                )
+                if username_conflict:
+                    raise HTTPException(
+                        status_code=status.HTTP_400_BAD_REQUEST,
+                        detail="A user with this username is already registered.",
+                    )
+                existing_user.username = user_data.username
+
             new_user = existing_user
             new_user.hashed_password = hash_password(user_data.password)
             db.commit()
@@ -184,11 +192,11 @@ def register_user(user_data: UserCreate, db: Session) -> User:
             send_otp_email(to_email=new_user.email, otp=plaintext_otp, purpose="registration")
 
         except EmailDeliveryError:
-            # Handle SMTP failure safely: remove challenge so user is not stuck behind cooldown or active OTP
+            # Handle delivery failure safely: remove challenge so user is not stuck behind cooldown or active OTP
             cancel_otp_challenge(db, challenge)
             raise HTTPException(
                 status_code=status.HTTP_503_SERVICE_UNAVAILABLE,
-                detail="User account created, but unable to deliver verification email at this time. Please check SMTP configuration or request a code resend.",
+                detail="User account created, but unable to deliver verification email at this time. Please request a new verification code.",
             )
 
     return new_user

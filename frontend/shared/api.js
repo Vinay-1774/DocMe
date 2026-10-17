@@ -535,6 +535,14 @@ export const api = {
     });
   },
 
+  async resendOtp(email, purpose = 'registration') {
+    return apiRequest('/auth/otp/resend', {
+      method: 'POST',
+      body: { email, purpose },
+      authRequired: false,
+    });
+  },
+
   async verifyOtp(email, otp, purpose = 'registration') {
     return apiRequest('/auth/otp/verify', {
       method: 'POST',

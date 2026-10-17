@@ -253,10 +253,25 @@ SMTP_TIMEOUT_SECONDS = _parse_int("SMTP_TIMEOUT_SECONDS", required=False) or 10
 # --- HTTPS Transactional Email Settings (Resend, Brevo, SendGrid) ---
 # Recommended on cloud platforms like Render where outbound SMTP ports 25, 465, and 587 are blocked
 RESEND_API_KEY = os.getenv("RESEND_API_KEY")
-RESEND_FROM_EMAIL = os.getenv("RESEND_FROM_EMAIL") or SMTP_FROM_EMAIL or "DocMe <onboarding@resend.dev>"
+RESEND_FROM_EMAIL = (
+    os.getenv("RESEND_FROM_EMAIL")
+    or os.getenv("EMAIL_FROM_ADDRESS")
+    or SMTP_FROM_EMAIL
+    or "DocMe <onboarding@resend.dev>"
+)
 
 BREVO_API_KEY = os.getenv("BREVO_API_KEY")
-BREVO_FROM_EMAIL = os.getenv("BREVO_FROM_EMAIL") or SMTP_FROM_EMAIL or "DocMe <noreply@docme.app>"
+BREVO_FROM_EMAIL = (
+    os.getenv("BREVO_FROM_EMAIL")
+    or os.getenv("EMAIL_FROM_ADDRESS")
+    or SMTP_FROM_EMAIL
+    or "DocMe <noreply@docme.app>"
+)
 
 SENDGRID_API_KEY = os.getenv("SENDGRID_API_KEY")
-SENDGRID_FROM_EMAIL = os.getenv("SENDGRID_FROM_EMAIL") or SMTP_FROM_EMAIL or "DocMe <noreply@docme.app>"
+SENDGRID_FROM_EMAIL = (
+    os.getenv("SENDGRID_FROM_EMAIL")
+    or os.getenv("EMAIL_FROM_ADDRESS")
+    or SMTP_FROM_EMAIL
+    or "DocMe <noreply@docme.app>"
+)

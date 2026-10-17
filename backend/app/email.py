@@ -66,6 +66,10 @@ def _send_via_resend(
 ) -> bool:
     """Dispatches verification email via Resend HTTPS API (Port 443)."""
     api_key = (config.RESEND_API_KEY or "").strip()
+    if not api_key:
+        logger.error("Email: RESEND_API_KEY is not configured. Outbound verification emails cannot be delivered via HTTPS.")
+        raise EmailDeliveryError("Email delivery service is not configured. Please set RESEND_API_KEY in Render environment variables.")
+
     from_email = config.RESEND_FROM_EMAIL or "DocMe <onboarding@resend.dev>"
     logger.info("Email: Dispatching OTP email to %s via Resend HTTPS API (from: %s)...", to_email, from_email)
 
@@ -83,20 +87,38 @@ def _send_via_resend(
     }
 
     try:
-        with httpx.Client(timeout=10.0) as client:
+        with httpx.Client(timeout=httpx.Timeout(15.0, connect=5.0)) as client:
             resp = client.post(url, json=payload, headers=headers)
+    except httpx.TimeoutException as exc:
+        logger.error("Email: Resend HTTPS request timed out")
+        raise EmailDeliveryError("Email delivery service timed out. Please try again.") from exc
+    except httpx.RequestError as exc:
+        logger.error("Email: Resend HTTPS network error (%s: %s)", type(exc).__name__, exc)
+        raise EmailDeliveryError(f"Email delivery network error: {type(exc).__name__}") from exc
     except Exception as exc:
-        logger.error("Email: Resend HTTPS request failed (%s: %s)", type(exc).__name__, exc)
-        raise EmailDeliveryError(f"Resend HTTPS request failed: {type(exc).__name__}") from exc
+        logger.error("Email: Resend request failed (%s)", type(exc).__name__)
+        raise EmailDeliveryError(f"Email delivery failed: {type(exc).__name__}") from exc
 
     if resp.status_code in (200, 201):
         data = resp.json()
         logger.info("Email: Successfully delivered OTP email to %s via Resend (ID: %s)", to_email, data.get("id"))
         return True
 
-    err_text = resp.text
-    logger.error("Email: Resend rejected delivery (HTTP %s): %s", resp.status_code, err_text)
-    raise EmailDeliveryError(f"Resend delivery error (HTTP {resp.status_code}): {err_text}")
+    # Parse and sanitize provider error response
+    try:
+        err_json = resp.json()
+        raw_msg = err_json.get("message") or resp.text
+    except Exception:
+        raw_msg = resp.text
+
+    sanitized_msg = str(raw_msg)
+    if api_key and api_key in sanitized_msg:
+        sanitized_msg = sanitized_msg.replace(api_key, "[REDACTED]")
+    if otp and otp in sanitized_msg:
+        sanitized_msg = sanitized_msg.replace(otp, "[REDACTED]")
+
+    logger.error("Email: Resend API rejected delivery (HTTP %s): %s", resp.status_code, sanitized_msg)
+    raise EmailDeliveryError(f"Resend delivery error (HTTP {resp.status_code}): {sanitized_msg}")
 
 
 def _send_via_brevo(
