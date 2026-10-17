@@ -515,38 +515,10 @@ export const api = {
     });
   },
 
-  async register(username, email, password, otp = null) {
-    const payload = { username, email, password };
-    if (otp) {
-      payload.otp = otp;
-    }
+  async register(username, email, password) {
     return apiRequest('/register', {
       method: 'POST',
-      body: payload,
-      authRequired: false,
-    });
-  },
-
-  async requestOtp(email, purpose = 'registration') {
-    return apiRequest('/auth/otp/request', {
-      method: 'POST',
-      body: { email, purpose },
-      authRequired: false,
-    });
-  },
-
-  async resendOtp(email, purpose = 'registration') {
-    return apiRequest('/auth/otp/resend', {
-      method: 'POST',
-      body: { email, purpose },
-      authRequired: false,
-    });
-  },
-
-  async verifyOtp(email, otp, purpose = 'registration') {
-    return apiRequest('/auth/otp/verify', {
-      method: 'POST',
-      body: { email, otp, purpose },
+      body: { username, email, password },
       authRequired: false,
     });
   },

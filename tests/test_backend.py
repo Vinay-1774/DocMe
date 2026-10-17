@@ -16,7 +16,6 @@ if str(BASE_DIR) not in sys.path:
     sys.path.insert(0, str(BASE_DIR))
 
 from backend.app import config
-config.REQUIRE_EMAIL_VERIFICATION = False
 TEST_DB_NAME = "research_platform_test"
 
 

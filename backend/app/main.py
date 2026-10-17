@@ -46,9 +46,6 @@ from .schema import (
     UserLogin,
     UserRankingResponse,
     UserResponse,
-    OTPRequest,
-    OTPVerifyRequest,
-    OTPResponse,
     MessageResponse,
 )
 from .auth import (
@@ -61,14 +58,6 @@ from .auth import (
     register_user,
     verify_refresh_token,
 )
-from .otp import (
-    cancel_otp_challenge,
-    create_otp_challenge,
-    verify_otp,
-    OTPCooldownError,
-    OTPRateLimitError,
-)
-from .email import send_otp_email, EmailDeliveryError
 from .ingestion import compute_file_hash, ingest_document, SUPPORTED_EXTENSIONS
 from .retrieval import retrieve_documents
 from .chat import stream_response
@@ -167,111 +156,6 @@ def root():
 def register(user_data: UserCreate, db: Session = Depends(get_db)):
     """Registers a new user."""
     return register_user(user_data, db)
-
-
-@app.post("/auth/otp/request", response_model=OTPResponse)
-def request_otp(
-    payload: OTPRequest,
-    db: Session = Depends(get_db),
-):
-    """
-    Requests a single-use 6-digit email OTP for registration or verification.
-    Enforces resend cooldown (30s) and hourly limits in PostgreSQL.
-    Never reveals whether the email is registered or not (prevents enumeration).
-    """
-    clean_email = payload.email.strip().lower()
-    existing_user = db.scalar(select(User).where(User.email == clean_email))
-
-    # For registration, if user already exists and is verified, do not reveal user existence
-    if payload.purpose == "registration" and existing_user and existing_user.is_verified:
-        return OTPResponse(
-            status="success",
-            message="If this email is eligible, a verification code has been sent.",
-        )
-
-    user_id = existing_user.id if existing_user else None
-
-    try:
-        challenge, plaintext_otp = create_otp_challenge(
-            db=db,
-            email=clean_email,
-            purpose=payload.purpose,
-            user_id=user_id,
-        )
-    except OTPCooldownError as e:
-        raise HTTPException(
-            status_code=status.HTTP_429_TOO_MANY_REQUESTS,
-            detail=str(e),
-            headers={"Retry-After": str(e.retry_after_seconds)},
-        )
-    except OTPRateLimitError as e:
-        raise HTTPException(
-            status_code=status.HTTP_429_TOO_MANY_REQUESTS,
-            detail=str(e),
-        )
-
-    try:
-        send_otp_email(to_email=clean_email, otp=plaintext_otp, purpose=payload.purpose)
-    except EmailDeliveryError:
-        cancel_otp_challenge(db, challenge)
-        raise HTTPException(
-            status_code=status.HTTP_503_SERVICE_UNAVAILABLE,
-            detail="Unable to deliver verification email at this time. Please check mail configuration.",
-        )
-
-    return OTPResponse(
-        status="success",
-        message="If this email is eligible, a verification code has been sent.",
-    )
-
-
-@app.post("/auth/otp/resend", response_model=OTPResponse)
-def resend_otp(
-    payload: OTPRequest,
-    db: Session = Depends(get_db),
-):
-    """
-    Explicit endpoint for requesting a fresh OTP verification code.
-    Maintains identical server-side cooldown (30s), rate limiting, and security controls.
-    """
-    return request_otp(payload=payload, db=db)
-
-
-@app.post("/auth/otp/verify", response_model=OTPResponse)
-def verify_otp_endpoint(
-    payload: OTPVerifyRequest,
-    db: Session = Depends(get_db),
-):
-    """
-    Verifies a 6-digit email OTP code against active challenges.
-    Enforces server-side 30-second expiry, max 5 attempts, and atomic single-use consumption.
-    """
-    result = verify_otp(
-        db=db,
-        email=payload.email,
-        otp=payload.otp,
-        purpose=payload.purpose,
-    )
-    if not result.success:
-        raise HTTPException(
-            status_code=status.HTTP_400_BAD_REQUEST,
-            detail=result.message,
-        )
-
-    # Mark user as verified in DB for registration and email_verification purposes
-    if payload.purpose in ("email_verification", "registration"):
-        clean_email = payload.email.strip().lower()
-        user = db.scalar(select(User).where(User.email == clean_email))
-        if user:
-            user.is_verified = True
-            db.commit()
-
-    return OTPResponse(
-        status="success",
-        message=result.message,
-    )
-
-
 
 
 def _clear_refresh_cookie_headers() -> dict[str, str]:

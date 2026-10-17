@@ -169,29 +169,29 @@ assert.strictEqual(elements['alert-container'].style.display, 'flex');
 assert.strictEqual(elements['email-error'].textContent, 'A user with this email is already registered.');
 console.log('  PASSED');
 
-// Test 7: Email provider failure (API returns 503 Service Unavailable)
-console.log('Test 7: Email-provider failure displays 503 service alert without breaking form');
+// Test 7: Duplicate username (API returns 400 Bad Request)
+console.log('Test 7: Duplicate username displays 400 error message');
 elements['username'].value = 'bob_test';
 elements['email'].value = 'bob@example.com';
 elements['password'].value = 'SecurePassword123!';
 
 global.fetch = async () => ({
   ok: false,
-  status: 503,
+  status: 400,
   headers: new Map([['content-type', 'application/json']]),
   json: async () => ({
-    detail: 'User account created, but unable to deliver verification email at this time. Please check SMTP configuration or request a code resend.'
+    detail: 'A user with this username is already registered.'
   }),
 });
 
 submitEvent = new global.Event('submit', { cancelable: true });
 await elements['register-form'].dispatchEvent(submitEvent);
-assert.ok(elements['alert-message'].textContent.includes('unable to deliver verification email'));
+assert.ok(elements['username-error'].textContent.includes('already registered'));
 assert.strictEqual(elements['alert-container'].style.display, 'flex');
 console.log('  PASSED');
 
-// Test 8: Successful registration triggers OTP verification screen transition
-console.log('Test 8: Successful registration transitions to OTP verification screen');
+// Test 8: Successful registration displays success alert and redirects
+console.log('Test 8: Successful registration displays account created success alert');
 elements['username'].value = 'carol_test';
 elements['email'].value = 'carol@example.com';
 elements['password'].value = 'SecurePassword123!';
@@ -204,16 +204,15 @@ global.fetch = async () => ({
     id: 99,
     username: 'carol_test',
     email: 'carol@example.com',
-    is_verified: false,
+    is_verified: true,
     created_at: new Date().toISOString()
   }),
 });
 
 submitEvent = new global.Event('submit', { cancelable: true });
 await elements['register-form'].dispatchEvent(submitEvent);
-assert.strictEqual(elements['register-card'].style.display, 'none');
-assert.strictEqual(elements['otp-card'].style.display, 'block');
-assert.strictEqual(elements['otp-target-email'].textContent, 'carol@example.com');
+assert.ok(elements['alert-message'].textContent.includes('Account created successfully'));
+assert.strictEqual(elements['alert-container'].style.display, 'flex');
 console.log('  PASSED');
 
 console.log('--- All Register DOM Tests Passed Successfully ---');

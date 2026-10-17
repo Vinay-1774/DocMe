@@ -6,7 +6,7 @@ const __filename = fileURLToPath(import.meta.url);
 const __dirname = path.dirname(__filename);
 const projectRoot = path.resolve(__dirname, '..');
 
-console.log('--- Starting Frontend OTP Registration Tests ---');
+console.log('--- Starting Simplified Frontend Registration Tests ---');
 
 // 1. Verify register.html markup
 const registerHtmlPath = path.join(projectRoot, 'frontend/pages/register.html');
@@ -14,20 +14,13 @@ const registerHtml = fs.readFileSync(registerHtmlPath, 'utf8');
 
 const requiredElements = [
   'id="register-card"',
-  'id="otp-card"',
   'id="register-form"',
-  'id="otp-form"',
-  'id="otp-input"',
-  'id="otp-target-email"',
-  'id="otp-countdown"',
-  'id="otp-timer-badge"',
-  'id="otp-verify-btn"',
-  'id="otp-resend-btn"',
-  'id="otp-back-btn"',
+  'id="username"',
+  'id="email"',
+  'id="password"',
+  'id="register-submit-btn"',
   'id="alert-container"',
   'id="alert-message"',
-  'id="otp-alert-container"',
-  'id="otp-alert-message"',
 ];
 
 for (const el of requiredElements) {
@@ -35,55 +28,67 @@ for (const el of requiredElements) {
     throw new Error(`register.html is missing required element: ${el}`);
   }
 }
-console.log('Test 1: register.html DOM Structure — PASSED');
 
-// 2. Verify register.css styles
-const registerCssPath = path.join(projectRoot, 'frontend/pages/register.css');
-const registerCss = fs.readFileSync(registerCssPath, 'utf8');
-
-const requiredCss = [
-  '.otp-code-input',
-  '.otp-timer-badge',
-  '.otp-timer-badge.is-expired',
-  '.otp-countdown-num',
-  '.btn-link',
+// Ensure obsolete OTP elements are removed
+const obsoleteOtpElements = [
+  'id="otp-card"',
+  'id="otp-form"',
+  'id="otp-input"',
+  'id="otp-countdown"',
+  'id="otp-verify-btn"',
+  'id="otp-resend-btn"',
 ];
 
-for (const rule of requiredCss) {
-  if (!registerCss.includes(rule)) {
-    throw new Error(`register.css is missing required rule: ${rule}`);
+for (const el of obsoleteOtpElements) {
+  if (registerHtml.includes(el)) {
+    throw new Error(`register.html should NOT contain obsolete element: ${el}`);
   }
 }
-console.log('Test 2: register.css Styling Rules — PASSED');
+console.log('Test 1: register.html DOM Structure (No OTP elements) — PASSED');
 
-// 3. Verify api.js methods
+// 2. Verify api.js methods
 const apiJsPath = path.join(projectRoot, 'frontend/shared/api.js');
 const apiJs = fs.readFileSync(apiJsPath, 'utf8');
 
-if (!apiJs.includes('requestOtp(') || !apiJs.includes('verifyOtp(')) {
-  throw new Error('api.js is missing requestOtp or verifyOtp methods');
+if (!apiJs.includes('register(username, email, password)')) {
+  throw new Error('api.js is missing register method');
 }
-console.log('Test 3: api.js OTP Methods — PASSED');
+if (!apiJs.includes('login(email, password)')) {
+  throw new Error('api.js is missing login method');
+}
+if (apiJs.includes('requestOtp(') || apiJs.includes('verifyOtp(') || apiJs.includes('resendOtp(')) {
+  throw new Error('api.js should NOT contain OTP methods (requestOtp, verifyOtp, resendOtp)');
+}
+console.log('Test 2: api.js Registration and Login Methods — PASSED');
 
-// 4. Verify register.js controller logic
+// 3. Verify register.js controller logic
 const registerJsPath = path.join(projectRoot, 'frontend/pages/register.js');
 const registerJs = fs.readFileSync(registerJsPath, 'utf8');
 
 const requiredLogic = [
   'api.register(',
-  'api.verifyOtp(',
-  'api.requestOtp(',
-  'showOtpScreen',
-  'startCountdown',
-  'stopCountdown',
-  'completeLogin',
+  'login.html?registered=true',
 ];
 
 for (const fn of requiredLogic) {
   if (!registerJs.includes(fn)) {
-    throw new Error(`register.js is missing logic: ${fn}`);
+    throw new Error(`register.js is missing required logic: ${fn}`);
   }
 }
-console.log('Test 4: register.js Controller Logic — PASSED');
 
-console.log('--- All Frontend OTP Registration Tests Completed Successfully ---');
+const obsoleteLogic = [
+  'showOtpScreen',
+  'api.verifyOtp',
+  'api.requestOtp',
+  'startCountdown',
+];
+
+for (const fn of obsoleteLogic) {
+  if (registerJs.includes(fn)) {
+    throw new Error(`register.js should NOT contain obsolete OTP logic: ${fn}`);
+  }
+}
+console.log('Test 3: register.js Controller Logic (Direct registration & redirect) — PASSED');
+
+console.log('--- All Simplified Frontend Registration Tests Completed Successfully ---');
+

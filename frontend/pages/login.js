@@ -128,11 +128,6 @@ async function initLoginPage() {
       setLoadingState(false);
 
       if (err instanceof ApiError) {
-        if (err.status === 403 && err.message.toLowerCase().includes('not verified')) {
-          const verifyUrl = `register.html?email=${encodeURIComponent(email)}&verify=true`;
-          showAlert(`Email is not verified. <a href="${verifyUrl}" style="color: #38bdf8; text-decoration: underline; font-weight: 600;">Click here to enter your code or request a new one</a>.`, 'error', true);
-          return;
-        }
         showAlert(err.message, 'error');
         if (err.status === 401) {
           showFieldError(emailInput, null, null);
