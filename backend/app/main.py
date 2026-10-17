@@ -14,6 +14,7 @@ from sqlalchemy.orm import Session
 logger = logging.getLogger(__name__)
 
 # Centralized configuration
+from . import config
 from .config import (
     COOKIE_SAMESITE,
     COOKIE_SECURE,
@@ -209,8 +210,9 @@ def _clear_refresh_cookie_headers() -> dict[str, str]:
     temp_resp.delete_cookie(
         key="rp_refresh_token",
         path="/",
-        secure=COOKIE_SECURE,
-        samesite=COOKIE_SAMESITE,
+        secure=config.COOKIE_SECURE,
+        samesite=config.COOKIE_SAMESITE,
+        httponly=True,
     )
     cookie_val = temp_resp.headers.get("set-cookie")
     return {"Set-Cookie": cookie_val} if cookie_val else {}
@@ -223,8 +225,8 @@ def _set_refresh_cookie(response: Response, user_id: int) -> str:
         key="rp_refresh_token",
         value=refresh_token,
         httponly=True,
-        samesite=COOKIE_SAMESITE,
-        secure=COOKIE_SECURE,
+        samesite=config.COOKIE_SAMESITE,
+        secure=config.COOKIE_SECURE,
         max_age=REFRESH_TOKEN_EXPIRE_DAYS * 86400,
         path="/",
     )

@@ -108,9 +108,18 @@ ALGORITHM = JWT_ALGORITHM
 ACCESS_TOKEN_EXPIRE_MINUTES = _parse_int("ACCESS_TOKEN_EXPIRE_MINUTES", required=True)
 REFRESH_TOKEN_EXPIRE_DAYS = _parse_int("REFRESH_TOKEN_EXPIRE_DAYS", required=True)
 
-COOKIE_SECURE = _parse_bool("COOKIE_SECURE", default=False)
-COOKIE_SAMESITE = (os.getenv("COOKIE_SAMESITE") or "").strip().lower()
-# Modern browsers require Secure=True if SameSite=None
+# Cookie Security & SameSite Policy:
+# In cross-domain production (e.g. Vercel frontend talking to Render backend),
+# modern browsers require SameSite=None and Secure=True for credentialed requests.
+# For local HTTP development, SameSite=lax and Secure=False is used.
+COOKIE_SECURE = _parse_bool("COOKIE_SECURE", default=_parse_bool("RENDER", default=False))
+_raw_samesite = (os.getenv("COOKIE_SAMESITE") or "").strip().lower()
+if _raw_samesite in ("lax", "none", "strict"):
+    COOKIE_SAMESITE = _raw_samesite
+else:
+    COOKIE_SAMESITE = "none" if COOKIE_SECURE else "lax"
+
+# Modern browsers strictly require Secure=True if SameSite=None
 if COOKIE_SAMESITE == "none" and not COOKIE_SECURE:
     COOKIE_SECURE = True
 
@@ -148,7 +157,56 @@ else:
 
 
 # --- CORS Settings ---
-CORS_ORIGINS = _parse_list("CORS_ORIGINS")
+DEFAULT_LOCALHOST_ORIGINS = [
+    "http://localhost:3000",
+    "http://localhost:5173",
+    "http://localhost:5500",
+    "http://localhost:8000",
+    "http://localhost:8080",
+    "http://127.0.0.1:3000",
+    "http://127.0.0.1:5173",
+    "http://127.0.0.1:5500",
+    "http://127.0.0.1:8000",
+    "http://127.0.0.1:8080",
+]
+
+
+def _parse_cors_origins(key: str = "CORS_ORIGINS") -> list[str]:
+    """
+    Parse a comma-separated list of allowed CORS origins from an environment variable.
+    - Preserves baseline localhost origins for development convenience.
+    - Normalizes origins by trimming whitespace, enclosing quotes, and trailing slashes.
+    - Strips paths if mistakenly entered (e.g., 'https://app.vercel.app/login' -> 'https://app.vercel.app').
+    - Excludes wildcard '*' because allow_credentials=True is enabled for session cookies.
+    """
+    from urllib.parse import urlsplit
+
+    origins: list[str] = list(DEFAULT_LOCALHOST_ORIGINS)
+    val = os.getenv(key)
+    if not val:
+        return origins
+
+    for item in val.split(","):
+        clean = item.strip().strip("\"'").strip()
+        if not clean:
+            continue
+        # Wildcard '*' combined with credentials: 'include' violates the CORS specification
+        if clean == "*":
+            continue
+        if clean.startswith(("http://", "https://")):
+            parsed = urlsplit(clean)
+            if parsed.scheme and parsed.netloc:
+                clean = f"{parsed.scheme}://{parsed.netloc}"
+        else:
+            clean = clean.rstrip("/")
+
+        if clean and clean not in origins:
+            origins.append(clean)
+
+    return origins
+
+
+CORS_ORIGINS = _parse_cors_origins("CORS_ORIGINS")
 
 
 # --- File Upload Storage ---

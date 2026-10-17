@@ -1714,6 +1714,143 @@ def test_document_deletion_deduplication_preserves_file(client):
     assert not os.path.exists(shared_file_path)
 
 
+# =====================================================================
+# CORS & Cross-Domain Security Tests
+# =====================================================================
+
+def test_cors_options_preflight_register_and_login_success(client):
+    """
+    Verifies that preflight OPTIONS requests to /register and /login from an allowed
+    production origin succeed with status 200 and return the expected CORS headers:
+    - Access-Control-Allow-Origin matching the exact request origin
+    - Access-Control-Allow-Credentials: true
+    - Access-Control-Allow-Methods containing POST
+    - Access-Control-Allow-Headers including Content-Type and Authorization
+    """
+    test_origin = "https://docme-platform.vercel.app"
+    if test_origin not in config.CORS_ORIGINS:
+        config.CORS_ORIGINS.append(test_origin)
+
+    for endpoint in ("/register", "/login"):
+        response = client.options(
+            endpoint,
+            headers={
+                "Origin": test_origin,
+                "Access-Control-Request-Method": "POST",
+                "Access-Control-Request-Headers": "content-type, authorization",
+            },
+        )
+        assert response.status_code == 200, f"Expected 200 for OPTIONS {endpoint}, got {response.status_code} ({response.text})"
+        assert response.headers.get("access-control-allow-origin") == test_origin
+        assert response.headers.get("access-control-allow-credentials") == "true"
+        allow_methods = response.headers.get("access-control-allow-methods", "")
+        assert "POST" in allow_methods
+        allow_headers = response.headers.get("access-control-allow-headers", "")
+        assert "content-type" in allow_headers.lower()
+
+
+def test_cors_options_preflight_disallowed_origin(client):
+    """
+    Verifies that preflight OPTIONS requests from an origin not in CORS_ORIGINS
+    return 400 Bad Request with 'Disallowed CORS origin' and omit Access-Control-Allow-Origin.
+    """
+    disallowed_origin = "https://unauthorized-attacker-site.com"
+    response = client.options(
+        "/login",
+        headers={
+            "Origin": disallowed_origin,
+            "Access-Control-Request-Method": "POST",
+            "Access-Control-Request-Headers": "content-type",
+        },
+    )
+    assert response.status_code == 400
+    assert "Disallowed CORS origin" in response.text
+    assert "access-control-allow-origin" not in response.headers
+
+
+def test_cors_origin_normalization_and_wildcard_exclusion(monkeypatch):
+    """
+    Verifies that _parse_cors_origins:
+    1. Preserves localhost development origins.
+    2. Strips whitespace, quotes, and trailing slashes.
+    3. Normalizes paths (e.g. 'https://app.vercel.app/login' -> 'https://app.vercel.app').
+    4. Excludes wildcard '*' so credentials (allow_credentials=True) are not compromised.
+    """
+    from backend.app.config import _parse_cors_origins
+
+    test_env_val = (
+        "https://my-docme-app.vercel.app/, "
+        "'https://quoted-domain.vercel.app', "
+        "\"https://path-domain.vercel.app/pages/login.html\", "
+        "*, "
+        "http://localhost:3000"
+    )
+    monkeypatch.setenv("TEST_CORS_ORIGINS", test_env_val)
+    parsed = _parse_cors_origins("TEST_CORS_ORIGINS")
+
+    # Normalized origins must be present without slashes or paths
+    assert "https://my-docme-app.vercel.app" in parsed
+    assert "https://my-docme-app.vercel.app/" not in parsed
+    assert "https://quoted-domain.vercel.app" in parsed
+    assert "https://path-domain.vercel.app" in parsed
+    assert "https://path-domain.vercel.app/pages/login.html" not in parsed
+
+    # Wildcard '*' MUST NOT be present
+    assert "*" not in parsed
+
+    # Localhost development origins must be preserved
+    assert "http://localhost:3000" in parsed
+    assert "http://localhost:5173" in parsed
+    assert "http://127.0.0.1:8000" in parsed
+
+
+def test_cross_domain_cookie_attributes_for_production(client):
+    """
+    Verifies that when COOKIE_SECURE=True and COOKIE_SAMESITE='none' (production Vercel <-> Render setup):
+    - Login Set-Cookie header contains HttpOnly, Secure, and SameSite=none.
+    - /refresh without credentials returns 401 Unauthorized with proper clear-cookie header.
+    """
+    orig_secure = config.COOKIE_SECURE
+    orig_samesite = config.COOKIE_SAMESITE
+    try:
+        config.COOKIE_SECURE = True
+        config.COOKIE_SAMESITE = "none"
+
+        # 1. Register and log in a test user
+        email = "cookie_test_user@example.com"
+        password = "SecurePassword123!"
+        reg_res = client.post(
+            "/register",
+            json={"username": "cookietestuser", "email": email, "password": password, "full_name": "Cookie Test User"},
+        )
+        assert reg_res.status_code == 201
+        login_res = client.post(
+            "/login",
+            json={"email": email, "password": password},
+        )
+        assert login_res.status_code == 200
+        set_cookie_header = login_res.headers.get("set-cookie", "")
+        assert "rp_refresh_token=" in set_cookie_header
+        assert "httponly" in set_cookie_header.lower()
+        assert "secure" in set_cookie_header.lower()
+        assert "samesite=none" in set_cookie_header.lower()
+
+        # 2. Verify /refresh without cookie returns 401 Unauthorized
+        client.cookies.clear()
+        refresh_res = client.post("/refresh")
+        assert refresh_res.status_code == 401
+        assert "Refresh token missing" in refresh_res.json()["detail"]
+        clear_cookie_hdr = refresh_res.headers.get("set-cookie", "")
+        assert "rp_refresh_token=" in clear_cookie_hdr
+        assert "httponly" in clear_cookie_hdr.lower()
+        assert "secure" in clear_cookie_hdr.lower()
+        assert "samesite=none" in clear_cookie_hdr.lower()
+    finally:
+        config.COOKIE_SECURE = orig_secure
+        config.COOKIE_SAMESITE = orig_samesite
+
+
+
 
 
 
