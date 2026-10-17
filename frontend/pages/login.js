@@ -5,7 +5,7 @@
  */
 
 import { api, ApiError } from '../shared/api.js';
-import { setToken, setUser, redirectIfAuthenticated } from '../shared/auth.js';
+import { setToken, setUser, clearAuth, redirectIfAuthenticated } from '../shared/auth.js';
 
 async function initLoginPage() {
   // 1. If user is already authenticated with a valid token, redirect immediately to feed
@@ -19,21 +19,13 @@ async function initLoginPage() {
   const isLoggedOut = Boolean(params.get('logged_out'));
 
   if (isSessionExpired) {
+    clearAuth();
     showAlert('Your session has expired. Please sign in again.', 'info');
+  } else if (isLoggedOut) {
+    clearAuth();
+    showAlert('You have been logged out successfully.', 'info');
   } else if (params.get('registered')) {
     showAlert('Account created successfully! Please sign in with your credentials.', 'success');
-  } else if (!isLoggedOut) {
-    // If arriving without an explicit logout or expiration, attempt transparent session recovery
-    try {
-      const refreshedToken = await api.refreshToken();
-      if (refreshedToken) {
-        const redirectUrl = params.get('redirect') || 'feed.html';
-        window.location.href = redirectUrl;
-        return;
-      }
-    } catch {
-      // No active session cookie; display login form
-    }
   }
 
   // DOM Elements
@@ -103,10 +95,13 @@ async function initLoginPage() {
     setLoadingState(true);
 
     try {
-      // 1. Submit credentials to backend POST /login
+      // 1. Clear any prior local session data to prevent cross-user contamination
+      clearAuth();
+
+      // 2. Submit credentials to backend POST /login
       const tokenData = await api.login(email, password);
       
-      // 2. Persist access token in localStorage
+      // 3. Persist access token in localStorage
       setToken(tokenData.access_token);
 
       // 3. Fetch authenticated user profile via GET /me

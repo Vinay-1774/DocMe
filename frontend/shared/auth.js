@@ -174,6 +174,19 @@ export async function requireAuth() {
   if (token && !isTokenExpired(token, 15)) {
     // Schedule background renewal if not already active
     scheduleTokenRefresh(token);
+
+    // Verify cached user profile matches current token subject to prevent cross-user data leakage
+    const payload = parseJwtPayload(token);
+    const cachedUser = getUser();
+    if (!cachedUser || (payload && String(cachedUser.id) !== String(payload.sub))) {
+      try {
+        const { api } = await import('./api.js');
+        const userProfile = await api.getMe();
+        setUser(userProfile);
+      } catch {
+        // Non-fatal if offline
+      }
+    }
     return true;
   }
 
@@ -182,6 +195,12 @@ export async function requireAuth() {
     const { api } = await import('./api.js');
     const refreshedToken = await api.refreshToken();
     if (refreshedToken) {
+      try {
+        const userProfile = await api.getMe();
+        setUser(userProfile);
+      } catch {
+        // Non-fatal
+      }
       return true;
     }
   } catch (err) {
@@ -233,7 +252,7 @@ export async function logout() {
     console.warn('Backend logout failed:', err);
   }
   clearAuth();
-  window.location.href = getRelativePathTo('login.html');
+  window.location.href = `${getRelativePathTo('login.html')}?logged_out=1`;
 }
 
 /**

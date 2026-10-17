@@ -281,6 +281,7 @@ def logout(response: Response):
         path="/",
         secure=COOKIE_SECURE,
         samesite=COOKIE_SAMESITE,
+        httponly=True,
     )
     return {"message": "Logged out successfully"}
 
