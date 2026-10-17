@@ -22,8 +22,6 @@ from .config import (
 from .database import get_db
 from .models import User
 from .schema import UserCreate, UserLogin
-from .otp import cancel_otp_challenge, create_otp_challenge, verify_otp
-from .email import EmailDeliveryError, send_otp_email
 
 
 
@@ -109,96 +107,32 @@ def verify_refresh_token(token: str) -> int:
 
 # --- Registration & Login Logic ---
 def register_user(user_data: UserCreate, db: Session) -> User:
-    """Registers a new user after verifying that the username and email are unique and validating OTP if provided."""
+    """Registers a new user after verifying that the username and email are unique."""
     existing_user = db.scalar(
         select(User).where(
             (User.email == user_data.email) | (User.username == user_data.username)
         )
     )
     if existing_user:
-        # Allow retry if account is still unverified and email matches
-        if not existing_user.is_verified and existing_user.email == user_data.email:
-            # If the username is also changing, ensure it doesn't conflict with another user
-            if existing_user.username != user_data.username:
-                username_conflict = db.scalar(
-                    select(User).where(User.username == user_data.username, User.id != existing_user.id)
-                )
-                if username_conflict:
-                    raise HTTPException(
-                        status_code=status.HTTP_400_BAD_REQUEST,
-                        detail="A user with this username is already registered.",
-                    )
-                existing_user.username = user_data.username
-
-            new_user = existing_user
-            new_user.hashed_password = hash_password(user_data.password)
-            db.commit()
-            db.refresh(new_user)
-        else:
-            if existing_user.email == user_data.email:
-                raise HTTPException(
-                    status_code=status.HTTP_400_BAD_REQUEST,
-                    detail="A user with this email is already registered.",
-                )
+        if existing_user.email == user_data.email:
             raise HTTPException(
                 status_code=status.HTTP_400_BAD_REQUEST,
-                detail="A user with this username is already registered.",
+                detail="A user with this email is already registered.",
             )
-    else:
-        new_user = None
-
-    # Determine initial verification state and OTP workflow
-    is_verified = False
-    if user_data.otp:
-        verification = verify_otp(
-            db=db,
-            email=user_data.email,
-            otp=user_data.otp,
-            purpose="registration",
+        raise HTTPException(
+            status_code=status.HTTP_400_BAD_REQUEST,
+            detail="A user with this username is already registered.",
         )
-        if not verification.success:
-            raise HTTPException(
-                status_code=status.HTTP_400_BAD_REQUEST,
-                detail=verification.message,
-            )
-        is_verified = True
-    elif not config.REQUIRE_EMAIL_VERIFICATION:
-        is_verified = True
 
-    if new_user is None:
-        new_user = User(
-            username=user_data.username,
-            email=user_data.email,
-            hashed_password=hash_password(user_data.password),
-            is_verified=is_verified,
-        )
-        db.add(new_user)
-        db.commit()
-        db.refresh(new_user)
-    elif is_verified:
-        new_user.is_verified = True
-        db.commit()
-        db.refresh(new_user)
-
-    # If verification is required and OTP was not pre-supplied, trigger OTP challenge and email
-    if config.REQUIRE_EMAIL_VERIFICATION and not is_verified:
-        challenge, plaintext_otp = create_otp_challenge(
-            db=db,
-            email=new_user.email,
-            purpose="registration",
-            user_id=new_user.id,
-        )
-        try:
-            send_otp_email(to_email=new_user.email, otp=plaintext_otp, purpose="registration")
-
-        except EmailDeliveryError:
-            # Handle delivery failure safely: remove challenge so user is not stuck behind cooldown or active OTP
-            cancel_otp_challenge(db, challenge)
-            raise HTTPException(
-                status_code=status.HTTP_503_SERVICE_UNAVAILABLE,
-                detail="User account created, but unable to deliver verification email at this time. Please request a new verification code.",
-            )
-
+    new_user = User(
+        username=user_data.username,
+        email=user_data.email,
+        hashed_password=hash_password(user_data.password),
+        is_verified=True,
+    )
+    db.add(new_user)
+    db.commit()
+    db.refresh(new_user)
     return new_user
 
 
@@ -206,7 +140,6 @@ def authenticate_user_by_email(email: str, password: str, db: Session) -> dict:
     """
     Authenticates a user by email and password, returning a JWT access token.
     Enforces strict email lookup without querying by username.
-    Enforces email verification requirement if configured by authentication policy.
     """
     user = db.scalar(select(User).where(User.email == email))
     if not user or not verify_password(password, user.hashed_password):
@@ -215,13 +148,6 @@ def authenticate_user_by_email(email: str, password: str, db: Session) -> dict:
             detail="Invalid email or password",
             headers={"WWW-Authenticate": "Bearer"},
         )
-
-    if config.REQUIRE_EMAIL_VERIFICATION and not user.is_verified:
-        raise HTTPException(
-            status_code=status.HTTP_403_FORBIDDEN,
-            detail="Email address is not verified. Please verify your email before logging in.",
-        )
-
 
     access_token = create_access_token(subject=user.id)
     return {
