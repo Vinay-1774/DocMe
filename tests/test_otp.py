@@ -473,11 +473,15 @@ def test_api_otp_request_non_enumeration(client, db_session):
     unregistered_email = "nonexistent@example.com"
     registered_email = "registered@example.com"
 
-    # Register one user
+    # Register one user and mark as verified
     client.post(
         "/register",
         json={"username": "registered_user", "email": registered_email, "password": "password123"},
     )
+    user = db_session.scalar(select(User).where(User.email == registered_email))
+    if user:
+        user.is_verified = True
+        db_session.commit()
 
     with patch("backend.app.main.send_otp_email", return_value=True):
         resp_unreg = client.post(
