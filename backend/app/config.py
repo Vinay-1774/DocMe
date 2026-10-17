@@ -157,7 +157,7 @@ else:
 
 
 # --- CORS Settings ---
-DEFAULT_LOCALHOST_ORIGINS = [
+DEFAULT_ALLOWED_ORIGINS = [
     "http://localhost:3000",
     "http://localhost:5173",
     "http://localhost:5500",
@@ -168,20 +168,23 @@ DEFAULT_LOCALHOST_ORIGINS = [
     "http://127.0.0.1:5500",
     "http://127.0.0.1:8000",
     "http://127.0.0.1:8080",
+    "https://docme-frontend.vercel.app",
 ]
+
+DEFAULT_LOCALHOST_ORIGINS = DEFAULT_ALLOWED_ORIGINS
 
 
 def _parse_cors_origins(key: str = "CORS_ORIGINS") -> list[str]:
     """
     Parse a comma-separated list of allowed CORS origins from an environment variable.
-    - Preserves baseline localhost origins for development convenience.
+    - Preserves baseline localhost and deployed production Vercel origins.
     - Normalizes origins by trimming whitespace, enclosing quotes, and trailing slashes.
-    - Strips paths if mistakenly entered (e.g., 'https://app.vercel.app/login' -> 'https://app.vercel.app').
+    - Strips paths if mistakenly entered (e.g., 'https://docme-frontend.vercel.app/' -> 'https://docme-frontend.vercel.app').
     - Excludes wildcard '*' because allow_credentials=True is enabled for session cookies.
     """
     from urllib.parse import urlsplit
 
-    origins: list[str] = list(DEFAULT_LOCALHOST_ORIGINS)
+    origins: list[str] = list(DEFAULT_ALLOWED_ORIGINS)
     val = os.getenv(key)
     if not val:
         return origins
@@ -207,6 +210,12 @@ def _parse_cors_origins(key: str = "CORS_ORIGINS") -> list[str]:
 
 
 CORS_ORIGINS = _parse_cors_origins("CORS_ORIGINS")
+
+# Origin regex: allows any localhost/127.0.0.1 port and docme-frontend (including Vercel preview deployments)
+CORS_ORIGIN_REGEX = os.getenv(
+    "CORS_ORIGIN_REGEX",
+    r"^(https?://(localhost|127\.0\.0\.1)(:[0-9]+)?|https://docme-frontend(-[a-zA-Z0-9_-]+)?\.vercel\.app)$",
+)
 
 
 # --- File Upload Storage ---

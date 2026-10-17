@@ -12,6 +12,8 @@ from fastapi.security import OAuth2PasswordRequestForm
 from sqlalchemy import func, select
 from sqlalchemy.orm import Session
 
+from starlette.datastructures import Headers
+
 logger = logging.getLogger(__name__)
 
 # Centralized configuration
@@ -20,6 +22,7 @@ from .config import (
     COOKIE_SAMESITE,
     COOKIE_SECURE,
     CORS_ORIGINS,
+    CORS_ORIGIN_REGEX,
     MAX_UPLOAD_SIZE_BYTES,
     MAX_UPLOAD_SIZE_MB,
     REFRESH_TOKEN_EXPIRE_DAYS,
@@ -91,6 +94,40 @@ async def lifespan(app: FastAPI):
     yield
 
 
+class DiagnosticCORSMiddleware(CORSMiddleware):
+    """
+    Subclass of Starlette CORSMiddleware providing safe, non-sensitive diagnostic
+    logging for rejected and accepted CORS preflight requests in production.
+    Does not expose sensitive credentials, cookies, or secrets.
+    """
+    def preflight_response(self, request_headers: Headers) -> Response:
+        requested_origin = request_headers.get("origin")
+        requested_method = request_headers.get("access-control-request-method")
+        requested_headers = request_headers.get("access-control-request-headers")
+
+        response = super().preflight_response(request_headers)
+
+        if response.status_code != 200:
+            logger.warning(
+                "CORS preflight REJECTED (HTTP %s): origin='%s', method='%s', headers='%s'. "
+                "Configured origins=%s, Regex='%s'",
+                response.status_code,
+                requested_origin,
+                requested_method,
+                requested_headers,
+                self.allow_origins,
+                getattr(self.allow_origin_regex, "pattern", None),
+            )
+        else:
+            logger.info(
+                "CORS preflight APPROVED (HTTP 200): origin='%s', method='%s', headers='%s'",
+                requested_origin,
+                requested_method,
+                requested_headers,
+            )
+        return response
+
+
 # Initialize FastAPI application
 app = FastAPI(
     title="Research Platform API",
@@ -99,14 +136,16 @@ app = FastAPI(
     lifespan=lifespan,
 )
 
-# Configure CORS using centralized project settings
+# Configure CORS using centralized project settings and diagnostic logging
 app.add_middleware(
-    CORSMiddleware,
+    DiagnosticCORSMiddleware,
     allow_origins=CORS_ORIGINS,
-    allow_origin_regex=r"^https?://(localhost|127\.0\.0\.1)(:[0-9]+)?$",
+    allow_origin_regex=CORS_ORIGIN_REGEX,
     allow_credentials=True,
-    allow_methods=["*"],
+    allow_methods=["GET", "POST", "PUT", "DELETE", "OPTIONS", "PATCH", "HEAD"],
     allow_headers=["*"],
+    expose_headers=["Content-Disposition", "Set-Cookie"],
+    max_age=600,
 )
 
 

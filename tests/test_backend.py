@@ -1727,9 +1727,8 @@ def test_cors_options_preflight_register_and_login_success(client):
     - Access-Control-Allow-Methods containing POST
     - Access-Control-Allow-Headers including Content-Type and Authorization
     """
-    test_origin = "https://docme-platform.vercel.app"
-    if test_origin not in config.CORS_ORIGINS:
-        config.CORS_ORIGINS.append(test_origin)
+    test_origin = "https://docme-frontend.vercel.app"
+    assert test_origin in config.CORS_ORIGINS
 
     for endpoint in ("/register", "/login"):
         response = client.options(
@@ -1766,6 +1765,25 @@ def test_cors_options_preflight_disallowed_origin(client):
     assert response.status_code == 400
     assert "Disallowed CORS origin" in response.text
     assert "access-control-allow-origin" not in response.headers
+
+
+def test_cors_options_preflight_vercel_preview_regex(client):
+    """
+    Verifies that preflight OPTIONS requests from Vercel preview branch deployments
+    matching CORS_ORIGIN_REGEX succeed with 200 OK and mirror the origin.
+    """
+    preview_origin = "https://docme-frontend-git-main-vinay-1774.vercel.app"
+    response = client.options(
+        "/register",
+        headers={
+            "Origin": preview_origin,
+            "Access-Control-Request-Method": "POST",
+            "Access-Control-Request-Headers": "content-type",
+        },
+    )
+    assert response.status_code == 200
+    assert response.headers.get("access-control-allow-origin") == preview_origin
+    assert response.headers.get("access-control-allow-credentials") == "true"
 
 
 def test_cors_origin_normalization_and_wildcard_exclusion(monkeypatch):
