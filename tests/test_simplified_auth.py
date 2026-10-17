@@ -225,6 +225,9 @@ def test_refresh_token_session(client):
     assert "access_token" in refreshed_data
 
 
+from backend.app.database import Base, get_db, sync_db_sequences
+
+
 def test_obsolete_otp_endpoints_return_404(client):
     """
     Test that obsolete OTP routes have been removed and return 404 Not Found.
@@ -237,3 +240,43 @@ def test_obsolete_otp_endpoints_return_404(client):
 
     res3 = client.post("/auth/otp/verify", json={"email": "anyone@test.com", "otp": "123456"})
     assert res3.status_code == 404
+
+
+def test_primary_key_sequence_synchronization(client):
+    """
+    Test that if rows are manually inserted with out-of-order IDs,
+    sync_db_sequences() detects and repairs the sequence so future
+    inserts generate unique IDs without pkey violation.
+    """
+    # 1. Manually insert a user with a manual high ID (simulating out-of-sync sequence)
+    with TestSessionLocal() as session:
+        manual_user = User(
+            id=500,
+            username="manual_high_id",
+            email="manual500@test.com",
+            hashed_password=hash_password("Pass123!"),
+            is_verified=True,
+        )
+        session.add(manual_user)
+        session.commit()
+
+    # 2. Run sync_db_sequences on test engine
+    results = sync_db_sequences(bind_engine=test_engine)
+    user_sync = next((r for r in results if r.get("table") == "users"), None)
+    assert user_sync is not None
+    assert user_sync["status"] == "synchronized"
+    assert user_sync["synchronized_to"] == 500
+
+    # 3. New registration without explicit ID must receive ID > 500 without unique constraint violation
+    reg_resp = client.post(
+        "/register",
+        json={
+            "username": "after_sync_user",
+            "email": "after_sync@test.com",
+            "password": "Password123!",
+        },
+    )
+    assert reg_resp.status_code == 201, reg_resp.text
+    new_user_data = reg_resp.json()
+    assert new_user_data["id"] == 501
+
