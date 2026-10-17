@@ -99,6 +99,31 @@ async function initDocumentChat() {
     if (e.target === deleteModal) closeDeleteModal();
   });
 
+  // Mobile View Switcher (Document vs Chat)
+  const workstationContainer = document.getElementById('chat-workstation-container');
+  const mobileTabDoc = document.getElementById('mobile-tab-doc');
+  const mobileTabChat = document.getElementById('mobile-tab-chat');
+
+  function switchMobileView(view) {
+    if (!workstationContainer) return;
+    if (view === 'doc') {
+      workstationContainer.classList.add('view-document');
+      mobileTabDoc?.classList.add('active');
+      mobileTabDoc?.setAttribute('aria-selected', 'true');
+      mobileTabChat?.classList.remove('active');
+      mobileTabChat?.setAttribute('aria-selected', 'false');
+    } else {
+      workstationContainer.classList.remove('view-document');
+      mobileTabChat?.classList.add('active');
+      mobileTabChat?.setAttribute('aria-selected', 'true');
+      mobileTabDoc?.classList.remove('active');
+      mobileTabDoc?.setAttribute('aria-selected', 'false');
+    }
+  }
+
+  mobileTabDoc?.addEventListener('click', () => switchMobileView('doc'));
+  mobileTabChat?.addEventListener('click', () => switchMobileView('chat'));
+
   confirmDeleteBtn?.addEventListener('click', async () => {
     if (!currentDoc) return;
 
@@ -393,6 +418,9 @@ async function initDocumentChat() {
 
     const question = chatInput.value.trim();
     if (!question) return;
+
+    // Switch to chat view if user is on mobile
+    switchMobileView('chat');
 
     isSubmitting = true;
 

@@ -56,10 +56,27 @@
     </div>
   </header>
 
+  <!-- Mobile View Toggle Bar: Document vs Chat (visible on <= 768px viewports) -->
+  <div class="mobile-workstation-tabs" id="mobile-workstation-tabs" role="tablist" aria-label="Workstation View Selection">
+    <button type="button" class="workstation-tab-btn" id="mobile-tab-doc" role="tab" aria-selected="false" aria-controls="viewer-pane">
+      <svg width="15" height="15" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2">
+        <path d="M14 2H6a2 2 0 0 0-2 2v16a2 2 0 0 0 2 2h12a2 2 0 0 0 2-2V8z"></path>
+        <polyline points="14 2 14 8 20 8"></polyline>
+      </svg>
+      <span>Document</span>
+    </button>
+    <button type="button" class="workstation-tab-btn active" id="mobile-tab-chat" role="tab" aria-selected="true" aria-controls="chat-pane">
+      <svg width="15" height="15" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2">
+        <path d="M21 15a2 2 0 0 1-2 2H7l-4 4V5a2 2 0 0 1 2-2h14a2 2 0 0 1 2 2z"></path>
+      </svg>
+      <span>AI Chat</span>
+    </button>
+  </div>
+
   <!-- Workstation: Two-Column Split View -->
-  <main class="chat-workstation-container" role="main">
+  <main class="chat-workstation-container" id="chat-workstation-container" role="main">
     <!-- Left Pane: Document Viewer -->
-    <section class="viewer-pane" aria-label="Document Content">
+    <section class="viewer-pane" id="viewer-pane" aria-label="Document Content">
       <div id="viewer-loading" class="pane-state-center">
         <div class="spinner spinner-dark"></div>
         <p class="text-subhead" style="margin-top: 0.75rem;">Loading document preview...</p>
@@ -102,7 +119,7 @@
     </section>
 
     <!-- Right Pane: AI Chatbot Panel -->
-    <section class="chat-pane" aria-label="Document Assistant">
+    <section class="chat-pane" id="chat-pane" aria-label="Document Assistant">
       <div class="chat-header">
         <div class="chat-header-info">
           <div class="chat-status-badge">

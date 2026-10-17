@@ -7,6 +7,6 @@
     "build": "node scripts/build.js",
     "build:prod": "node scripts/build.js --prod",
     "build:clean": "node scripts/build.js --clean",
-    "test:frontend": "node tests/test_frontend_auth.mjs && node tests/test_backend_url_config.mjs && node tests/test_document_deletion_frontend.mjs && node tests/test_typing_indicator.mjs && node tests/test_profile_upload.mjs && node tests/test_frontend_otp.mjs"
+    "test:frontend": "node tests/test_frontend_auth.mjs && node tests/test_backend_url_config.mjs && node tests/test_document_deletion_frontend.mjs && node tests/test_typing_indicator.mjs && node tests/test_profile_upload.mjs && node tests/test_frontend_otp.mjs && node tests/test_responsiveness.mjs"
   }
 }

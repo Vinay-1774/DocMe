@@ -250,3 +250,46 @@
     background: transparent;
   }
 }
+
+@media (max-width: 480px) {
+  .auth-main {
+    padding: 1.5rem 0.875rem;
+    align-items: flex-start;
+  }
+
+  .auth-card-container {
+    padding: 0.75rem 0.25rem;
+    max-width: 100%;
+  }
+
+  .mobile-brand-bar {
+    margin-bottom: 1.25rem;
+  }
+
+  .mobile-brand-bar .brand-logo-img {
+    height: 2rem;
+  }
+
+  .auth-header {
+    margin-bottom: 1.25rem;
+  }
+
+  .auth-header .heading-1 {
+    font-size: 1.5rem;
+  }
+}
+
+@media (max-width: 340px) {
+  .auth-main {
+    padding: 1rem 0.375rem;
+  }
+
+  .auth-card-container {
+    padding: 0.5rem 0;
+  }
+
+  .auth-header .heading-1 {
+    font-size: 1.3rem;
+  }
+}
+
