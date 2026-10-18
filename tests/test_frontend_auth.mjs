@@ -277,6 +277,111 @@ async function runTests() {
   assert.strictEqual(auth.getToken(), null, 'Credentials cleared on confirmed 401 refresh rejection');
   console.log('  PASSED (Credentials cleared on genuine 401)');
 
+  // Test 10: 5 concurrent requests receiving 401 trigger exactly 1 refresh call and retry cleanly
+  console.log('Test 10: 5 concurrent 401 requests deduplicate refresh and retry');
+  auth.setToken(createMockJwt('42', 3600));
+
+  let concurrentRefreshCalls = 0;
+  const requestAttempts = new Map();
+
+  global.fetch = async (url, opts) => {
+    if (url.includes('/refresh')) {
+      concurrentRefreshCalls++;
+      // Simulate real async delay
+      await new Promise((r) => setTimeout(r, 40));
+      return {
+        ok: true,
+        status: 200,
+        headers: new Map([['content-type', 'application/json']]),
+        json: async () => ({
+          access_token: createMockJwt('42', 7200),
+          token_type: 'bearer',
+        }),
+      };
+    }
+
+    // Endpoints for our 5 parallel requests
+    const match = url.match(/\/concurrent\/(\d+)/);
+    if (match) {
+      const id = match[1];
+      const currentCount = requestAttempts.get(id) || 0;
+      requestAttempts.set(id, currentCount + 1);
+
+      if (currentCount === 0) {
+        // First attempt returns 401
+        return {
+          ok: false,
+          status: 401,
+          headers: new Map([['content-type', 'application/json']]),
+          json: async () => ({ detail: 'Token expired' }),
+        };
+      }
+      // Second attempt (after refresh) succeeds
+      return {
+        ok: true,
+        status: 200,
+        headers: new Map([['content-type', 'application/json']]),
+        json: async () => ({ url, success: true }),
+      };
+    }
+
+    return { ok: true, status: 200, headers: new Map(), json: async () => ({}) };
+  };
+
+  const concurrentResults = await Promise.all([
+    apiModule.apiRequest('/concurrent/1'),
+    apiModule.apiRequest('/concurrent/2'),
+    apiModule.apiRequest('/concurrent/3'),
+    apiModule.apiRequest('/concurrent/4'),
+    apiModule.apiRequest('/concurrent/5'),
+  ]);
+
+  // Verify: Exactly 1 refresh call was made for all 5 concurrent 401s
+  assert.strictEqual(concurrentRefreshCalls, 1, 'Exactly 1 /refresh call should be dispatched for 5 concurrent 401 responses');
+  // Verify: All 5 requests retried once and succeeded
+  assert.strictEqual(concurrentResults.length, 5);
+  for (let i = 1; i <= 5; i++) {
+    assert.strictEqual(requestAttempts.get(String(i)), 2, `Request ${i} should have been attempted exactly twice (1 fail + 1 retry)`);
+  }
+  console.log('  PASSED (5 concurrent 401s deduplicated to 1 refresh, all 5 retried and succeeded)');
+
+  // Test 10b: 5 concurrent 401s with failed refresh reject all without infinite retry
+  console.log('Test 10b: 5 concurrent 401s with failed refresh reject without infinite loops');
+  auth.setToken(createMockJwt('42', 3600));
+  let failedRefreshCalls = 0;
+
+  global.fetch = async (url) => {
+    if (url.includes('/refresh')) {
+      failedRefreshCalls++;
+      await new Promise((r) => setTimeout(r, 20));
+      return {
+        ok: false,
+        status: 401,
+        headers: new Map([['content-type', 'application/json']]),
+        json: async () => ({ detail: 'Refresh expired' }),
+      };
+    }
+    return {
+      ok: false,
+      status: 401,
+      headers: new Map([['content-type', 'application/json']]),
+      json: async () => ({ detail: 'Unauthorized' }),
+    };
+  };
+
+  const settled = await Promise.allSettled([
+    apiModule.apiRequest('/concurrent/fail/1'),
+    apiModule.apiRequest('/concurrent/fail/2'),
+    apiModule.apiRequest('/concurrent/fail/3'),
+    apiModule.apiRequest('/concurrent/fail/4'),
+    apiModule.apiRequest('/concurrent/fail/5'),
+  ]);
+
+  assert.strictEqual(failedRefreshCalls, 1, 'Only 1 failed /refresh attempt should occur for concurrent group');
+  assert.strictEqual(settled.filter((s) => s.status === 'rejected').length, 5, 'All 5 should reject on refresh failure');
+  assert.strictEqual(auth.getToken(), null, 'Auth token cleared on refresh failure');
+  console.log('  PASSED (All 5 rejected cleanly without infinite loops)');
+
   // Restore fetch
   global.fetch = originalFetch;
 

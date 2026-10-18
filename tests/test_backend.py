@@ -2088,6 +2088,260 @@ def test_document_download_missing_storage_file_detail(client):
         assert "Document file was not found on the server storage" in dl_res.json()["detail"]
 
 
+# =====================================================================
+# Phase 3 Hardening Regression Tests
+# =====================================================================
+
+def test_private_document_chat_authorization_regression(client):
+    """
+    Task 1: Comprehensive regression test for private document chat authorization.
+    Verifies that:
+    1. Unauthorized users receive HTTP 403 Forbidden on private documents (non-streaming and streaming).
+    2. Unauthenticated requests receive HTTP 401 Unauthorized.
+    3. Non-existent documents return HTTP 404 Not Found.
+    4. Document owner can successfully chat (streaming and non-streaming).
+    5. Public documents allow chat for any authenticated user.
+    """
+    token_alice = _auth_user(client, "alice_chat_auth", "alice_chat_auth@example.com")
+    token_bob = _auth_user(client, "bob_chat_auth", "bob_chat_auth@example.com")
+    docx_bytes = create_sample_docx_bytes("Confidential quantum computing research and encryption keys.")
+
+    with patch("backend.app.ingestion.generate_embedding", side_effect=mock_generate_embedding), \
+         patch("backend.app.ingestion.generate_embeddings", side_effect=mock_generate_embeddings), \
+         patch("backend.app.nodes.generate_response", return_value="Here is the quantum analysis answer."), \
+         patch("backend.app.chat.generate_response", return_value="Here is the quantum analysis answer."):
+
+        # Alice creates a private document
+        res_priv = client.post(
+            "/documents",
+            headers={"Authorization": f"Bearer {token_alice}"},
+            data={"title": "Alice Private QC Research", "visibility": "private"},
+            files={"file": ("qc_private.docx", docx_bytes, "application/vnd.openxmlformats-officedocument.wordprocessingml.document")},
+        )
+        assert res_priv.status_code == 201
+        priv_doc_id = res_priv.json()["id"]
+
+        # Alice creates a public document
+        res_pub = client.post(
+            "/documents",
+            headers={"Authorization": f"Bearer {token_alice}"},
+            data={"title": "Alice Public QC Overview", "visibility": "public"},
+            files={"file": ("qc_public.docx", docx_bytes, "application/vnd.openxmlformats-officedocument.wordprocessingml.document")},
+        )
+        assert res_pub.status_code == 201
+        pub_doc_id = res_pub.json()["id"]
+
+        # 1. Bob attempts non-streaming chat with Alice's private doc -> 403 Forbidden
+        bob_chat_sync = client.post(
+            f"/documents/{priv_doc_id}/chat",
+            headers={"Authorization": f"Bearer {token_bob}"},
+            json={"question": "What are the encryption keys?"},
+        )
+        assert bob_chat_sync.status_code == 403
+        assert "not authorized to chat with this private document" in bob_chat_sync.json()["detail"]
+
+        # 2. Bob attempts streaming chat (query param) with Alice's private doc -> 403 Forbidden
+        bob_chat_stream_q = client.post(
+            f"/documents/{priv_doc_id}/chat?stream=true",
+            headers={"Authorization": f"Bearer {token_bob}"},
+            json={"question": "What are the encryption keys?"},
+        )
+        assert bob_chat_stream_q.status_code == 403
+        assert "not authorized to chat with this private document" in bob_chat_stream_q.json()["detail"]
+
+        # 3. Bob attempts streaming chat (JSON body flag) with Alice's private doc -> 403 Forbidden
+        bob_chat_stream_b = client.post(
+            f"/documents/{priv_doc_id}/chat",
+            headers={"Authorization": f"Bearer {token_bob}"},
+            json={"question": "What are the encryption keys?", "stream": True},
+        )
+        assert bob_chat_stream_b.status_code == 403
+        assert "not authorized to chat with this private document" in bob_chat_stream_b.json()["detail"]
+
+        # 4. Anonymous user attempts chat on private doc -> 401 Unauthorized
+        anon_chat = client.post(
+            f"/documents/{priv_doc_id}/chat",
+            json={"question": "What is inside?"},
+        )
+        assert anon_chat.status_code == 401
+
+        # 5. Non-existent document ID -> 404 Not Found
+        non_existent_chat = client.post(
+            "/documents/999999/chat",
+            headers={"Authorization": f"Bearer {token_alice}"},
+            json={"question": "Where is it?"},
+        )
+        assert non_existent_chat.status_code == 404
+
+        # 6. Alice (owner) chats non-streaming -> 200 OK
+        alice_chat_sync = client.post(
+            f"/documents/{priv_doc_id}/chat",
+            headers={"Authorization": f"Bearer {token_alice}"},
+            json={"question": "What is quantum computing?"},
+        )
+        assert alice_chat_sync.status_code == 200
+        sync_data = alice_chat_sync.json()
+        assert sync_data["answer"] == "Here is the quantum analysis answer."
+        assert len(sync_data["sources"]) > 0
+
+        # 7. Alice (owner) chats streaming -> 200 OK
+        with patch("backend.app.chat.stream_response", return_value=iter(["event: message\ndata: {\"token\": \"Quantum\"}\n\n", "event: done\ndata: {}\n\n"])):
+            alice_chat_stream = client.post(
+                f"/documents/{priv_doc_id}/chat?stream=true",
+                headers={"Authorization": f"Bearer {token_alice}"},
+                json={"question": "Tell me about quantum computing"},
+            )
+            assert alice_chat_stream.status_code == 200
+            assert "text/event-stream" in alice_chat_stream.headers["content-type"]
+
+        # 8. Bob chats with public document -> 200 OK
+        bob_pub_chat = client.post(
+            f"/documents/{pub_doc_id}/chat",
+            headers={"Authorization": f"Bearer {token_bob}"},
+            json={"question": "What is public?"},
+        )
+        assert bob_pub_chat.status_code == 200
+
+
+def test_csrf_origin_verification(client):
+    """
+    Task 2: Regression test verifying CSRF origin validation on /refresh and /logout.
+    1. Legitimate origins (production Vercel, preview Vercel, localhost) are permitted.
+    2. Untrusted origins (e.g. evil.com) are rejected with HTTP 403 Forbidden.
+    3. Untrusted referers are rejected with HTTP 403 Forbidden.
+    4. Requests without Origin/Referer (server-to-server or test clients) are permitted.
+    """
+    # 1. Register and login to obtain refresh cookie
+    client.post("/register", json={"username": "csrf_user", "email": "csrf_user@example.com", "password": "password123"})
+    login_res = client.post("/login", json={"email": "csrf_user@example.com", "password": "password123"})
+    assert login_res.status_code == 200
+    assert "rp_refresh_token" in client.cookies
+
+    # 2. Legitimate production Vercel Origin -> 200 OK
+    res_vercel = client.post("/refresh", headers={"Origin": "https://docme-frontend.vercel.app"})
+    assert res_vercel.status_code == 200
+    assert "access_token" in res_vercel.json()
+
+    # 3. Legitimate preview Vercel Origin -> 200 OK
+    res_preview = client.post("/refresh", headers={"Origin": "https://docme-frontend-preview-branch-1.vercel.app"})
+    assert res_preview.status_code == 200
+    assert "access_token" in res_preview.json()
+
+    # 4. Legitimate localhost Origin -> 200 OK
+    res_local = client.post("/refresh", headers={"Origin": "http://localhost:3000"})
+    assert res_local.status_code == 200
+
+    # 5. Untrusted Origin on /refresh -> 403 Forbidden
+    res_evil_refresh = client.post("/refresh", headers={"Origin": "https://evil.com"})
+    assert res_evil_refresh.status_code == 403
+    assert "CSRF check failed: untrusted origin" in res_evil_refresh.json()["detail"]
+
+    # 6. Untrusted Origin on /logout -> 403 Forbidden
+    res_evil_logout = client.post("/logout", headers={"Origin": "https://attacker.org"})
+    assert res_evil_logout.status_code == 403
+    assert "CSRF check failed: untrusted origin" in res_evil_logout.json()["detail"]
+
+    # 7. Untrusted Referer on /refresh -> 403 Forbidden
+    res_evil_referer = client.post("/refresh", headers={"Referer": "https://malicious-phishing.com/account"})
+    assert res_evil_referer.status_code == 403
+    assert "CSRF check failed: untrusted origin" in res_evil_referer.json()["detail"]
+
+    # 8. Missing Origin / Referer (standard client / test) -> 200 OK
+    res_direct = client.post("/refresh")
+    assert res_direct.status_code == 200
+    assert "access_token" in res_direct.json()
+
+    # 9. Legitimate Origin on /logout -> 200 OK
+    res_legit_logout = client.post("/logout", headers={"Origin": "https://docme-frontend.vercel.app"})
+    assert res_legit_logout.status_code == 200
+    assert res_legit_logout.json()["message"] == "Logged out successfully"
+
+
+def test_cloud_storage_upload_failure_behavior(client):
+    """
+    Task 4: Regression test for cloud storage failure handling.
+    Verifies that when persistent cloud storage is enabled, a failure to upload to
+    Supabase Storage:
+    1. Returns HTTP 500 with detail 'Failed to persist document to cloud storage.'
+    2. Does NOT create an orphaned document record in the database.
+    3. Cleans up the staged temporary file on disk so no stray files accumulate.
+    """
+    from backend.app.storage import storage_manager
+    from backend.app.config import UPLOAD_DIR
+    from backend.app.models import Document
+    from backend.app.database import get_db
+
+    token_user = _auth_user(client, "storage_fail_user", "storage_fail_user@example.com")
+    pdf_bytes = create_sample_pdf_bytes()
+
+    initial_files = set(UPLOAD_DIR.glob("*"))
+
+    with patch.object(storage_manager, "is_supabase_storage_enabled", return_value=True), \
+         patch.object(storage_manager, "upload_to_supabase", return_value=False):
+
+        up_res = client.post(
+            "/documents",
+            headers={"Authorization": f"Bearer {token_user}"},
+            data={"title": "Cloud Fail Doc", "visibility": "public"},
+            files={"file": ("cloud_fail.pdf", pdf_bytes, "application/pdf")},
+        )
+        assert up_res.status_code == 500
+        assert "Failed to persist document to cloud storage." in up_res.json()["detail"]
+
+    # Verify no document was saved in database
+    db = next(get_db())
+    doc_in_db = db.query(Document).filter(Document.title == "Cloud Fail Doc").first()
+    assert doc_in_db is None
+
+    # Verify no leaked staged files remain
+    current_files = set(UPLOAD_DIR.glob("*"))
+    assert current_files == initial_files
+
+
+def test_ingestion_failure_cleans_up_cloud_storage(client):
+    """
+    Task 4: Regression test verifying that if text ingestion or chunking fails
+    after a successful Supabase upload, the cloud storage object is cleaned up
+    and the database transaction is rolled back.
+    """
+    from backend.app.storage import storage_manager
+    from backend.app.models import Document
+    from backend.app.database import get_db
+
+    token_user = _auth_user(client, "ingest_fail_user", "ingest_fail_user@example.com")
+    pdf_bytes = create_sample_pdf_bytes()
+
+    deleted_cloud_keys = []
+
+    def mock_delete_from_supabase(key):
+        deleted_cloud_keys.append(key)
+        return True
+
+    with patch.object(storage_manager, "is_supabase_storage_enabled", return_value=True), \
+         patch.object(storage_manager, "upload_to_supabase", return_value=True), \
+         patch.object(storage_manager, "delete_from_supabase", side_effect=mock_delete_from_supabase), \
+         patch("backend.app.main.ingest_document", side_effect=RuntimeError("Simulated ingestion crash")):
+
+        up_res = client.post(
+            "/documents",
+            headers={"Authorization": f"Bearer {token_user}"},
+            data={"title": "Ingest Fail Doc", "visibility": "public"},
+            files={"file": ("ingest_fail.pdf", pdf_bytes, "application/pdf")},
+        )
+        assert up_res.status_code == 400
+        assert "Document processing failed" in up_res.json()["detail"]
+
+    # Verify delete_from_supabase was called to clean up the uploaded cloud object
+    assert len(deleted_cloud_keys) == 1
+    assert deleted_cloud_keys[0].endswith(".pdf")
+
+    # Verify database was rolled back
+    db = next(get_db())
+    doc_in_db = db.query(Document).filter(Document.title == "Ingest Fail Doc").first()
+    assert doc_in_db is None
+
+
+
 
 
 

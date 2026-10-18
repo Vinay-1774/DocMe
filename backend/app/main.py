@@ -1,9 +1,11 @@
 import logging
 import os
+import re
 import shutil
 from contextlib import asynccontextmanager
-from uuid import uuid4
 from typing import List, Literal, Optional
+from urllib.parse import urlsplit
+from uuid import uuid4
 
 from fastapi import Depends, FastAPI, File, Form, HTTPException, Query, Request, Response, UploadFile, status
 from fastapi.middleware.cors import CORSMiddleware
@@ -206,6 +208,56 @@ def _set_refresh_cookie(response: Response, user_id: int) -> str:
     return refresh_token
 
 
+def is_origin_allowed(origin: Optional[str]) -> bool:
+    """Checks whether an Origin or Referer origin is permitted by project CORS configuration."""
+    if not origin:
+        return True
+    clean_origin = origin.rstrip("/")
+    if clean_origin in CORS_ORIGINS or origin in CORS_ORIGINS:
+        return True
+    if CORS_ORIGIN_REGEX and re.match(CORS_ORIGIN_REGEX, clean_origin):
+        return True
+    return False
+
+
+def verify_csrf_origin(request: Request) -> None:
+    """
+    Validates Origin and Referer headers for cookie-authenticated mutating endpoints (/refresh, /logout).
+    Prevents cross-site request forgery when cookies are configured with SameSite=None in production.
+    Preserves legitimate browser requests from deployed Vercel and local environments.
+    """
+    origin = request.headers.get("origin")
+    if origin:
+        if not is_origin_allowed(origin):
+            logger.warning("CSRF check rejected untrusted origin: %s", origin)
+            raise HTTPException(
+                status_code=status.HTTP_403_FORBIDDEN,
+                detail="CSRF check failed: untrusted origin.",
+            )
+        return
+
+    referer = request.headers.get("referer")
+    if referer:
+        parsed_ref = urlsplit(referer)
+        if parsed_ref.scheme and parsed_ref.netloc:
+            ref_origin = f"{parsed_ref.scheme}://{parsed_ref.netloc}"
+            if not is_origin_allowed(ref_origin):
+                logger.warning("CSRF check rejected untrusted referer: %s", referer)
+                raise HTTPException(
+                    status_code=status.HTTP_403_FORBIDDEN,
+                    detail="CSRF check failed: untrusted origin.",
+                )
+        return
+
+    sec_fetch_site = request.headers.get("sec-fetch-site")
+    if sec_fetch_site == "cross-site":
+        logger.warning("CSRF check rejected cross-site request with missing origin/referer")
+        raise HTTPException(
+            status_code=status.HTTP_403_FORBIDDEN,
+            detail="CSRF check failed: cross-site request rejected.",
+        )
+
+
 @app.post("/token", response_model=TokenResponse)
 def oauth2_token(
     response: Response,
@@ -252,6 +304,7 @@ def refresh_session(
     Refreshes an expired short-lived access token using the persistent HttpOnly refresh token.
     Avoids unexpected user logout when access tokens expire.
     """
+    verify_csrf_origin(request)
     token = request.cookies.get("rp_refresh_token")
     if not token:
         # Fallback to custom header if client or test passes it explicitly
@@ -293,8 +346,9 @@ def refresh_session(
 
 
 @app.post("/logout")
-def logout(response: Response):
+def logout(request: Request, response: Response):
     """Revokes the persistent session by clearing the HttpOnly refresh token cookie."""
+    verify_csrf_origin(request)
     response.delete_cookie(
         key="rp_refresh_token",
         path="/",
