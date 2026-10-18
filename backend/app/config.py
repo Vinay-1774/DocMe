@@ -228,3 +228,22 @@ else:
 UPLOAD_DIR.mkdir(parents=True, exist_ok=True)
 
 
+# --- Persistent Cloud Storage Configuration (Supabase Storage) ---
+# When deployed on ephemeral hosts (Render), original document files are persisted
+# in Supabase Storage so that downloads and inline viewing persist across restarts.
+SUPABASE_URL = os.getenv("SUPABASE_URL")
+if not SUPABASE_URL and DATABASE_URL_RAW:
+    import re
+    # Automatically infer Supabase project URL from DATABASE_URL if available
+    ref_match = re.search(r"db\.([a-z0-9_-]+)\.supabase\.co", DATABASE_URL_RAW) or re.search(
+        r"postgres\.([a-z0-9_-]+):", DATABASE_URL_RAW
+    )
+    if ref_match:
+        SUPABASE_URL = f"https://{ref_match.group(1)}.supabase.co"
+
+SUPABASE_SERVICE_ROLE_KEY = os.getenv("SUPABASE_SERVICE_ROLE_KEY") or os.getenv("SUPABASE_KEY")
+SUPABASE_STORAGE_BUCKET = os.getenv("SUPABASE_STORAGE_BUCKET", "documents")
+STORAGE_BACKEND = (os.getenv("STORAGE_BACKEND") or "auto").strip().lower()
+
+
+

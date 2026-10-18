@@ -1888,6 +1888,206 @@ def test_lifespan_fails_startup_on_db_error():
                 pass
 
 
+# =====================================================================
+# Tests for Persistent Cloud Storage, Render Restart Simulation & Authorization
+# =====================================================================
+
+def test_storage_manager_path_traversal_prevention():
+    """
+    Verifies that StorageManager sanitizes file paths to prevent directory traversal attacks.
+    """
+    from backend.app.storage import storage_manager
+
+    assert storage_manager.get_storage_key("../../../etc/passwd") == "passwd"
+    assert storage_manager.get_storage_key("..\\..\\windows\\win.ini") == "win.ini"
+    assert storage_manager.get_storage_key("c9c33f86eb99446ab31363381d653cc5.pdf") == "c9c33f86eb99446ab31363381d653cc5.pdf"
+    assert storage_manager.get_storage_key("/opt/render/project/src/backend/uploads/test.pdf") == "test.pdf"
+
+
+def _auth_user(client, username, email):
+    client.post("/register", json={"username": username, "email": email, "password": "password123"})
+    res = client.post("/login", json={"email": email, "password": "password123"})
+    return res.json()["access_token"]
+
+
+def test_public_document_unauthenticated_view_and_download(client):
+    """
+    Verifies that public documents can be viewed (metadata and inline PDF)
+    and downloaded by unauthenticated users, while private documents remain protected.
+    """
+    token_alice = _auth_user(client, "alice_pubview", "alice_pubview@example.com")
+    token_bob = _auth_user(client, "bob_pubview", "bob_pubview@example.com")
+
+    with patch("backend.app.ingestion.generate_embedding", side_effect=mock_generate_embedding), \
+         patch("backend.app.ingestion.generate_embeddings", side_effect=mock_generate_embeddings), \
+         patch("backend.app.ingestion.extract_text_and_metadata", return_value=[{"text": "Public physics content", "page_number": 1}]):
+
+        # 1. Alice uploads public PDF
+        pdf_bytes = create_sample_pdf_bytes()
+        pub_res = client.post(
+            "/documents",
+            headers={"Authorization": f"Bearer {token_alice}"},
+            data={"title": "Public Physics Research", "visibility": "public"},
+            files={"file": ("physics.pdf", pdf_bytes, "application/pdf")},
+        )
+        assert pub_res.status_code == 201
+        pub_id = pub_res.json()["id"]
+
+        # 2. Alice uploads private PDF
+        priv_bytes = create_sample_pdf_bytes()
+        priv_res = client.post(
+            "/documents",
+            headers={"Authorization": f"Bearer {token_alice}"},
+            data={"title": "Private Lab Notes", "visibility": "private"},
+            files={"file": ("lab_notes.pdf", priv_bytes, "application/pdf")},
+        )
+        assert priv_res.status_code == 201
+        priv_id = priv_res.json()["id"]
+
+    # 3. Unauthenticated user views public document metadata
+    anon_pub_meta = client.get(f"/documents/{pub_id}")
+    assert anon_pub_meta.status_code == 200
+    assert anon_pub_meta.json()["title"] == "Public Physics Research"
+
+    # 4. Unauthenticated user renders public document inline
+    anon_pub_view = client.get(f"/documents/{pub_id}/download?inline=true")
+    assert anon_pub_view.status_code == 200
+    assert anon_pub_view.headers["content-type"] == "application/pdf"
+    assert "inline" in anon_pub_view.headers["content-disposition"]
+
+    # 5. Unauthenticated user downloads public document
+    anon_pub_down = client.get(f"/documents/{pub_id}/download")
+    assert anon_pub_down.status_code == 200
+    assert "attachment" in anon_pub_down.headers["content-disposition"]
+
+    # 6. Unauthenticated user accessing private document gets 401
+    anon_priv_meta = client.get(f"/documents/{priv_id}")
+    assert anon_priv_meta.status_code == 401
+
+    anon_priv_down = client.get(f"/documents/{priv_id}/download")
+    assert anon_priv_down.status_code == 401
+
+    # 7. Non-owner (Bob) accessing private document gets 403
+    bob_priv_meta = client.get(f"/documents/{priv_id}", headers={"Authorization": f"Bearer {token_bob}"})
+    assert bob_priv_meta.status_code == 403
+
+    bob_priv_down = client.get(f"/documents/{priv_id}/download", headers={"Authorization": f"Bearer {token_bob}"})
+    assert bob_priv_down.status_code == 403
+
+
+def test_persistent_storage_cloud_simulation_and_container_restart(client):
+    """
+    Simulates the complete production workflow on Render with Supabase Storage:
+    1. Upload a PDF with Supabase Storage enabled.
+    2. Confirm cloud storage received the file.
+    3. Simulate Render redeploy/container restart: local container file is erased.
+    4. Open inline PDF in viewer: backend transparently restores file from Supabase Storage.
+    5. Download PDF: succeeds with attachment Content-Disposition.
+    6. Delete document: cleans up database and cloud storage bucket.
+    """
+    from backend.app.storage import storage_manager
+    from backend.app.config import UPLOAD_DIR
+
+    fake_supabase_bucket = {}
+
+    def fake_upload(storage_key, content, media_type=None):
+        fake_supabase_bucket[storage_key] = bytes(content)
+        return True
+
+    def fake_download(storage_key):
+        return fake_supabase_bucket.get(storage_key)
+
+    def fake_delete(storage_key):
+        fake_supabase_bucket.pop(storage_key, None)
+        return True
+
+    with patch.object(storage_manager, "is_supabase_storage_enabled", return_value=True), \
+         patch.object(storage_manager, "upload_to_supabase", side_effect=fake_upload), \
+         patch.object(storage_manager, "download_from_supabase", side_effect=fake_download), \
+         patch.object(storage_manager, "delete_from_supabase", side_effect=fake_delete), \
+         patch("backend.app.ingestion.generate_embedding", side_effect=mock_generate_embedding), \
+         patch("backend.app.ingestion.generate_embeddings", side_effect=mock_generate_embeddings), \
+         patch("backend.app.ingestion.extract_text_and_metadata", return_value=[{"text": "Whitepaper content", "page_number": 1}]):
+
+        token_carol = _auth_user(client, "carol_cloud", "carol_cloud@example.com")
+        raw_pdf = create_sample_pdf_bytes().getvalue()
+
+        # 1. Upload PDF
+        upload_res = client.post(
+            "/documents",
+            headers={"Authorization": f"Bearer {token_carol}"},
+            data={"title": "Cloud Persisted Whitepaper", "visibility": "public"},
+            files={"file": ("whitepaper.pdf", io.BytesIO(raw_pdf), "application/pdf")},
+        )
+        assert upload_res.status_code == 201
+        doc_data = upload_res.json()
+        doc_id = doc_data["id"]
+
+        # Confirm file was stored in cloud storage
+        assert len(fake_supabase_bucket) == 1
+        storage_key = list(fake_supabase_bucket.keys())[0]
+        assert fake_supabase_bucket[storage_key] == raw_pdf
+
+        # 2. Simulate Render container rebuild / restart:
+        # Wipe local container cached copy
+        local_disk_copy = UPLOAD_DIR / storage_key
+        if local_disk_copy.is_file():
+            local_disk_copy.unlink()
+        assert not local_disk_copy.is_file()
+
+        # 3. View inline PDF after restart: should restore from Supabase Storage and render inline
+        view_res = client.get(f"/documents/{doc_id}/download?inline=true")
+        assert view_res.status_code == 200
+        assert view_res.headers["content-type"] == "application/pdf"
+        assert "inline" in view_res.headers["content-disposition"]
+        assert view_res.content == raw_pdf
+
+        # Confirm local disk now has re-cached file for subsequent requests
+        assert local_disk_copy.is_file()
+
+        # 4. Download PDF: should succeed
+        down_res = client.get(f"/documents/{doc_id}/download")
+        assert down_res.status_code == 200
+        assert "attachment" in down_res.headers["content-disposition"]
+        assert down_res.content == raw_pdf
+
+        # 5. Delete document: cleans up DB and cloud bucket
+        del_res = client.delete(f"/documents/{doc_id}", headers={"Authorization": f"Bearer {token_carol}"})
+        assert del_res.status_code == 200
+        assert storage_key not in fake_supabase_bucket
+        assert not local_disk_copy.is_file()
+
+
+def test_document_download_missing_storage_file_detail(client):
+    """
+    Verifies that if a document file is missing from both local disk and cloud storage,
+    the endpoint returns HTTP 404 with a helpful detail message.
+    """
+    from backend.app.storage import storage_manager
+
+    token_dave = _auth_user(client, "dave_missing", "dave_missing@example.com")
+    pdf_bytes = create_sample_pdf_bytes()
+
+    with patch("backend.app.ingestion.generate_embedding", side_effect=mock_generate_embedding), \
+         patch("backend.app.ingestion.generate_embeddings", side_effect=mock_generate_embeddings), \
+         patch("backend.app.ingestion.extract_text_and_metadata", return_value=[{"text": "Missing file content", "page_number": 1}]):
+
+        up = client.post(
+            "/documents",
+            headers={"Authorization": f"Bearer {token_dave}"},
+            data={"title": "Missing File Doc", "visibility": "public"},
+            files={"file": ("missing.pdf", pdf_bytes, "application/pdf")},
+        )
+        assert up.status_code == 201
+        doc_id = up.json()["id"]
+
+    # Delete local file and ensure resolve returns None
+    with patch.object(storage_manager, "resolve_local_file_path", return_value=None):
+        dl_res = client.get(f"/documents/{doc_id}/download")
+        assert dl_res.status_code == 404
+        assert "Document file was not found on the server storage" in dl_res.json()["detail"]
+
+
 
 
 

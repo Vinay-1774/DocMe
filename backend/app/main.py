@@ -9,10 +9,12 @@ from fastapi import Depends, FastAPI, File, Form, HTTPException, Query, Request,
 from fastapi.middleware.cors import CORSMiddleware
 from fastapi.responses import FileResponse, StreamingResponse
 from fastapi.security import OAuth2PasswordRequestForm
-from sqlalchemy import func, select
+from sqlalchemy import func, or_, select
 from sqlalchemy.orm import Session
 
 from starlette.datastructures import Headers
+
+from .storage import storage_manager
 
 logger = logging.getLogger(__name__)
 
@@ -505,11 +507,12 @@ def upload_document(
         select(Document).where(Document.user_id == current_user.id)
     ).all()
     for existing_doc in user_docs:
-        if os.path.isfile(existing_doc.file_path):
+        existing_local = storage_manager.resolve_local_file_path(existing_doc.file_path)
+        if existing_local and os.path.isfile(existing_local):
             try:
                 if (
                     existing_doc.title.strip().lower() == title.strip().lower()
-                    and compute_file_hash(existing_doc.file_path) == file_hash
+                    and compute_file_hash(str(existing_local)) == file_hash
                 ):
                     # Verify chunks actually exist in DB for this document
                     chunks_count = db.scalar(
@@ -517,19 +520,37 @@ def upload_document(
                     ) or 0
                     if chunks_count > 0:
                         # Existing document with persisted chunks and embeddings found!
-                        # Clean up the duplicate staged file from disk and reuse existing document
+                        # Clean up duplicate staged file from disk and reuse existing document
                         if file_created and saved_file_path.is_file():
                             saved_file_path.unlink(missing_ok=True)
                         return existing_doc
             except Exception as hash_err:
                 logger.warning("Error checking file hash for doc %s: %s", existing_doc.id, hash_err)
 
-    # 2. Stage Document record and ingest chunks atomically
+    # 2. Upload to persistent Supabase Storage if enabled
+    supabase_uploaded = False
+    if storage_manager.is_supabase_storage_enabled():
+        with open(saved_file_path, "rb") as f:
+            file_bytes = f.read()
+        media_type = "application/pdf" if ext == ".pdf" else "application/vnd.openxmlformats-officedocument.wordprocessingml.document"
+        if not storage_manager.upload_to_supabase(safe_filename, file_bytes, media_type):
+            if file_created and saved_file_path.is_file():
+                saved_file_path.unlink(missing_ok=True)
+            raise HTTPException(
+                status_code=status.HTTP_500_INTERNAL_SERVER_ERROR,
+                detail="Failed to persist document to cloud storage.",
+            )
+        supabase_uploaded = True
+        stored_reference = safe_filename
+    else:
+        stored_reference = str(saved_file_path)
+
+    # 3. Stage Document record and ingest chunks atomically
     new_doc = Document(
         user_id=current_user.id,
         title=title.strip(),
         description=description.strip() if description else None,
-        file_path=str(saved_file_path),
+        file_path=stored_reference,
         file_type=ext.lstrip("."),
         visibility=visibility,
     )
@@ -552,6 +573,10 @@ def upload_document(
         # Roll back transaction immediately so the session is restored to a clean state
         db.rollback()
 
+        # Clean up cloud storage if uploaded
+        if supabase_uploaded:
+            storage_manager.delete_from_supabase(safe_filename)
+
         # If a Document row was already committed by a nested operation, clean it up safely
         doc_id = getattr(new_doc, "id", None)
         if doc_id:
@@ -563,12 +588,12 @@ def upload_document(
             except Exception:
                 db.rollback()
 
-        # Clean up the newly created file only without deleting files belonging to other documents
+        # Clean up the newly created local file only without deleting files belonging to other documents
         if file_created and saved_file_path.is_file():
             try:
                 referenced_by_other = db.scalar(
                     select(Document.id).where(
-                        Document.file_path == str(saved_file_path),
+                        (Document.file_path == str(saved_file_path)) | (Document.file_path == safe_filename),
                         Document.id != (doc_id or 0),
                     )
                 )
@@ -616,19 +641,25 @@ def list_documents(
 @app.get("/documents/{document_id}", response_model=DocumentResponse)
 def get_document(
     document_id: int,
-    current_user: User = Depends(get_current_user),
+    current_user: Optional[User] = Depends(get_optional_current_user),
     db: Session = Depends(get_db),
 ):
-    """Retrieves document metadata if the authenticated user has access."""
+    """Retrieves document metadata if the user has access."""
     doc = db.scalar(select(Document).where(Document.id == document_id))
     if not doc:
         raise HTTPException(status_code=status.HTTP_404_NOT_FOUND, detail="Document not found.")
 
-    if doc.visibility == "private" and doc.user_id != current_user.id:
-        raise HTTPException(
-            status_code=status.HTTP_403_FORBIDDEN,
-            detail="You are not authorized to view this private document.",
-        )
+    if doc.visibility == "private":
+        if current_user is None:
+            raise HTTPException(
+                status_code=status.HTTP_401_UNAUTHORIZED,
+                detail="Not authenticated",
+            )
+        if doc.user_id != current_user.id:
+            raise HTTPException(
+                status_code=status.HTTP_403_FORBIDDEN,
+                detail="You are not authorized to view this private document.",
+            )
 
     return doc
 
@@ -700,11 +731,14 @@ def delete_document(
         )
 
     file_path_str = doc.file_path
+    storage_key = storage_manager.get_storage_key(file_path_str)
 
-    # Check if another document in the database references the same file path (deduplication safeguard)
+    # Check if another document in the database references the same file path or storage key (deduplication safeguard)
     other_docs_count = db.scalar(
         select(func.count(Document.id)).where(
-            Document.file_path == file_path_str,
+            (Document.file_path == file_path_str)
+            | (Document.file_path == storage_key)
+            | (Document.file_path.like(f"%{storage_key}")),
             Document.id != doc.id,
         )
     ) or 0
@@ -723,10 +757,9 @@ def delete_document(
     # Safely remove uploaded file from storage if no other document references it
     if other_docs_count == 0 and file_path_str:
         try:
-            if os.path.isfile(file_path_str):
-                os.unlink(file_path_str)
-        except OSError as e:
-            logger.warning("Could not delete file %s from disk after document deletion: %s", file_path_str, e)
+            storage_manager.delete_file(file_path_str)
+        except Exception as e:
+            logger.warning("Could not delete file %s from storage after document deletion: %s", file_path_str, e)
 
     return MessageResponse(
         message="Document deleted successfully.",
@@ -763,22 +796,7 @@ def download_document(
                 detail="You are not authorized to download this private document.",
             )
 
-    if not os.path.isfile(doc.file_path):
-        raise HTTPException(
-            status_code=status.HTTP_404_NOT_FOUND,
-            detail="Document file was not found on the server storage.",
-        )
-
-    download_name = f"{doc.title}.{doc.file_type}"
-    is_pdf = (doc.file_type or "").lower() == "pdf"
-    media_type = "application/pdf" if is_pdf else "application/octet-stream"
-
-    return FileResponse(
-        path=doc.file_path,
-        filename=download_name,
-        media_type=media_type,
-        content_disposition_type="inline" if inline else "attachment",
-    )
+    return storage_manager.get_file_response(doc, inline=inline)
 
 
 # =====================================================================

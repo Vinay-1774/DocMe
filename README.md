@@ -244,6 +244,9 @@ Test coverage includes:
    - **Start Command**: `uvicorn backend.app.main:app --host 0.0.0.0 --port $PORT`
 3. Configure Environment Variables in Render:
    - `DATABASE_URL`: Your Supabase connection string (`postgresql+psycopg://...`)
+   - `SUPABASE_URL`: Your Supabase project URL (`https://<project-ref>.supabase.co`)
+   - `SUPABASE_SERVICE_ROLE_KEY`: Your Supabase service role secret key (enables persistent document storage in private bucket)
+   - `SUPABASE_STORAGE_BUCKET`: `documents` (created automatically with private-by-default access)
    - `JWT_SECRET_KEY`: Secure random string (`openssl rand -hex 32`)
    - `GEMINI_API_KEY`: Your Google AI Studio API key
    - `CORS_ORIGINS`: Your Vercel frontend URL (e.g. `https://docme.vercel.app`)
@@ -252,9 +255,9 @@ Test coverage includes:
 4. Deploy the service. Once active, note the assigned URL: `https://<service-name>.onrender.com`.
 
 > [!NOTE]
-> **Render Free Plan Characteristics**:
+> **Render Free Plan & File Persistence**:
 > - Free instances spin down after 15 minutes of inactivity. The first request after idle takes ~30-50 seconds (cold start).
-> - Render's local disk is ephemeral. Stored vector chunks and embeddings in Supabase persist indefinitely across restarts. Original document downloads rely on local disk; for permanent original file persistence across Render rebuilds in production, attach Supabase Storage or an S3 bucket.
+> - Render's local container disk is ephemeral. Stored vector chunks and embeddings in Supabase persist indefinitely across restarts. Original document files are automatically stored in the private Supabase Storage bucket (`documents`) and cached locally, ensuring document viewing and downloads persist seamlessly across Render restarts and redeployments.
 
 ### 3. Frontend Deployment: Vercel (Free Plan)
 

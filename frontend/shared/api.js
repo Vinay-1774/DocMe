@@ -614,7 +614,7 @@ export const api = {
   async getDocument(documentId) {
     return apiRequest(`/documents/${documentId}`, {
       method: 'GET',
-      authRequired: true,
+      authRequired: false,
     });
   },
 

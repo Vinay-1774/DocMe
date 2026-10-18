@@ -345,10 +345,10 @@ async function initDocumentChat() {
         pdfViewerFrame.src = `${pdfBlobUrl}#view=FitH&toolbar=1&navpanes=1`;
         pdfViewerFrame.style.display = 'block';
         docxFallbackView.style.display = 'none';
-      } catch {
+      } catch (err) {
         viewerContainer.style.display = 'none';
         viewerError.style.display = 'flex';
-        viewerErrorMessage.textContent = "We couldn't load this document. Please try again.";
+        viewerErrorMessage.textContent = err?.message || "We couldn't load this document. Please try again.";
       }
     } else {
       pdfViewerFrame.style.display = 'none';
