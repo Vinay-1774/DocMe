@@ -8,6 +8,7 @@
 
 import { api, ApiError } from '../shared/api.js';
 import { requireAuth, getUser, setupUserMenuAndLogout, renderAvatarHtml } from '../shared/auth.js';
+import { escapeHtml } from '../shared/format.js';
 
 async function initFeedPage() {
   // Ensure user is authenticated
@@ -609,15 +610,6 @@ async function initFeedPage() {
     }
   }
 
-  function escapeHtml(str) {
-    if (!str) return '';
-    return str
-      .replace(/&/g, '&amp;')
-      .replace(/</g, '&lt;')
-      .replace(/>/g, '&gt;')
-      .replace(/"/g, '&quot;')
-      .replace(/'/g, '&#039;');
-  }
 }
 
 if (document.readyState === 'loading') {

@@ -845,18 +845,6 @@ button, input, select, textarea {
   max-width: 200px;
 }
 
-.brand-logo-icon {
-  width: 2.25rem;
-  height: 2.25rem;
-  border-radius: var(--radius-md);
-  background: linear-gradient(135deg, #4f46e5 0%, #7c3aed 100%);
-  display: flex;
-  align-items: center;
-  justify-content: center;
-  color: #ffffff;
-  box-shadow: 0 4px 10px rgba(79, 70, 229, 0.3);
-}
-
 /* =====================================================================
    Keyframe Animations
    ===================================================================== */
@@ -898,21 +886,6 @@ button, input, select, textarea {
   width: 3rem;
   height: 3rem;
   font-size: 1.125rem;
-}
-
-.rank-badge {
-  display: inline-flex;
-  align-items: center;
-  justify-content: center;
-  width: 1.35rem;
-  height: 1.35rem;
-  border-radius: var(--radius-sm);
-  background-color: var(--bg-subtle);
-  color: var(--text-secondary);
-  font-size: 0.75rem;
-  font-weight: 700;
-  border: 1px solid var(--border-default);
-  flex-shrink: 0;
 }
 
 .doc-uploader-badge {

@@ -6,6 +6,7 @@
 
 import { api, ApiError } from '../shared/api.js';
 import { setToken, setUser, clearAuth, redirectIfAuthenticated } from '../shared/auth.js';
+import { isValidEmail } from '../shared/format.js';
 
 async function initLoginPage() {
   // 1. If user is already authenticated with a valid token, redirect immediately to feed
@@ -136,10 +137,6 @@ async function initLoginPage() {
   });
 
   // Helper Functions
-  function isValidEmail(str) {
-    // Standard RFC5322-compatible basic email pattern
-    return /^[^\s@]+@[^\s@]+\.[^\s@]+$/.test(str);
-  }
 
   function showFieldError(input, errorEl, message) {
     input.classList.add('is-invalid');

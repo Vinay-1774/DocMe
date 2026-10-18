@@ -4,7 +4,7 @@
  * Provides unified request configuration, token injection, and structured error handling.
  */
 
-import { getToken, setToken, setUser, clearAuth, isTokenExpired } from './auth.js';
+import { getToken, setToken, clearAuth, isTokenExpired } from './auth.js';
 import { ENV_CONFIG } from './env.js';
 
 /**

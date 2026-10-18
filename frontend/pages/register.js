@@ -6,6 +6,7 @@
 
 import { api, ApiError } from '../shared/api.js';
 import { redirectIfAuthenticated } from '../shared/auth.js';
+import { isValidEmail } from '../shared/format.js';
 
 function initRegisterPage() {
   // If already authenticated, redirect to feed
@@ -128,9 +129,6 @@ function initRegisterPage() {
   }
 
   // UI Utilities
-  function isValidEmail(str) {
-    return /^[^\s@]+@[^\s@]+\.[^\s@]+$/.test(str);
-  }
 
   function showFieldError(input, errorEl, message) {
     if (input) input.classList.add('is-invalid');

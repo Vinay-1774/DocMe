@@ -21,6 +21,16 @@ export function escapeHtml(str) {
 }
 
 /**
+ * Validates basic RFC5322-compatible email format.
+ * @param {string} str
+ * @returns {boolean}
+ */
+export function isValidEmail(str) {
+  if (!str || typeof str !== 'string') return false;
+  return /^[^\s@]+@[^\s@]+\.[^\s@]+$/.test(str);
+}
+
+/**
  * Converts markdown text into structured, sanitized HTML.
  * Organizes content into readable paragraphs, headings, bullet lists,
  * and code blocks safely without risking raw unescaped HTML injection.

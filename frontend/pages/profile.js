@@ -13,6 +13,7 @@ import {
   getAvatarColor,
   renderAvatarHtml,
 } from '../shared/auth.js';
+import { escapeHtml } from '../shared/format.js';
 
 async function initProfilePage() {
   if (!await requireAuth()) return;
@@ -37,8 +38,6 @@ async function initProfilePage() {
   const profileEmail = document.getElementById('profile-email');
   const profileJoined = document.getElementById('profile-joined');
   const statDocCount = document.getElementById('stat-doc-count');
-  const navUsername = document.getElementById('nav-username');
-  const navAvatar = document.getElementById('nav-avatar');
 
   const loadingEl = document.getElementById('docs-loading');
   const container = document.getElementById('user-docs-container');
@@ -170,9 +169,9 @@ async function initProfilePage() {
     if (e.target === uploadModal) closeUploadModal();
   });
 
-  // Global event delegation to guarantee catching all empty-state & upload clicks
+  // Event delegation to catch dynamic empty-state & upload triggers
   document.addEventListener('click', (e) => {
-    const uploadTrigger = e.target.closest('#empty-upload-action, #open-upload-btn, .empty-upload-action, [data-action="upload-document"]');
+    const uploadTrigger = e.target.closest('.empty-upload-action, [data-action="upload-document"]');
     if (uploadTrigger) {
       e.preventDefault();
       e.stopPropagation();
@@ -507,15 +506,6 @@ async function initProfilePage() {
     setTimeout(() => { profileAlert.style.display = 'none'; }, 5000);
   }
 
-  function escapeHtml(str) {
-    if (!str) return '';
-    return str
-      .replace(/&/g, '&amp;')
-      .replace(/</g, '&lt;')
-      .replace(/>/g, '&gt;')
-      .replace(/"/g, '&quot;')
-      .replace(/'/g, '&#039;');
-  }
 }
 
 if (document.readyState === 'loading') {

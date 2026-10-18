@@ -53,7 +53,7 @@ async function initDocumentChat() {
   });
 
   document.addEventListener('click', (e) => {
-    const uploadTrigger = e.target.closest('#empty-upload-action, #open-upload-btn, .empty-upload-action, [data-action="upload-document"]');
+    const uploadTrigger = e.target.closest('.empty-upload-action, [data-action="upload-document"]');
     if (uploadTrigger) {
       e.preventDefault();
       e.stopPropagation();

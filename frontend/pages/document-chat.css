@@ -167,6 +167,14 @@
   margin-bottom: 0.2rem;
 }
 
+.status-dot {
+  width: 6px;
+  height: 6px;
+  border-radius: 50%;
+  background-color: var(--success);
+  box-shadow: 0 0 8px var(--success);
+}
+
 .chat-title {
   font-family: var(--font-display);
   font-weight: 700;
@@ -300,13 +308,6 @@
   }
 }
 
-.message-citation-note {
-  margin-top: 0.5rem;
-  font-size: 0.75rem;
-  color: var(--text-muted);
-  border-top: 1px solid var(--border-default);
-  padding-top: 0.5rem;
-}
 
 /* Sources / Citations Drawer */
 .sources-container {
