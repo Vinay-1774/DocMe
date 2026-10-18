@@ -79,6 +79,18 @@ async def lifespan(app: FastAPI):
     try:
         init_db()
         logger.info("Database schema initialized successfully.")
+        if storage_manager.is_supabase_storage_enabled():
+            logger.info(
+                "Persistent Supabase Storage is ENABLED (bucket: '%s', url: %s).",
+                storage_manager.bucket_name,
+                storage_manager.supabase_url,
+            )
+        else:
+            logger.warning(
+                "Persistent Supabase Storage is NOT enabled. Storing files locally in %s. "
+                "Set SUPABASE_URL and SUPABASE_SERVICE_ROLE_KEY to persist files across Render deployments.",
+                storage_manager.upload_dir,
+            )
     except Exception as exc:
         logger.critical("Fatal: Failed to initialize database schema: %s", exc, exc_info=True)
         raise RuntimeError(f"Database initialization failed: {exc}") from exc
@@ -143,10 +155,15 @@ app.add_middleware(
 # --- Root Status Endpoint ---
 @app.get("/")
 def root():
-    """Confirms that the Research Platform API is running."""
+    """Confirms that the Research Platform API is running and reports storage status."""
     return {
         "status": "online",
         "message": "Research Platform API is running",
+        "storage": {
+            "backend": "supabase" if storage_manager.is_supabase_storage_enabled() else "local",
+            "persistent_cloud_storage": storage_manager.is_supabase_storage_enabled(),
+            "bucket": storage_manager.bucket_name if storage_manager.is_supabase_storage_enabled() else None,
+        },
     }
 
 

@@ -231,19 +231,35 @@ UPLOAD_DIR.mkdir(parents=True, exist_ok=True)
 # --- Persistent Cloud Storage Configuration (Supabase Storage) ---
 # When deployed on ephemeral hosts (Render), original document files are persisted
 # in Supabase Storage so that downloads and inline viewing persist across restarts.
-SUPABASE_URL = os.getenv("SUPABASE_URL")
-if not SUPABASE_URL and DATABASE_URL_RAW:
+def _clean_env_str(val: Optional[str]) -> Optional[str]:
+    if not val:
+        return None
+    cleaned = val.strip().strip("\"'").strip()
+    return cleaned if cleaned else None
+
+_raw_supabase_url = _clean_env_str(os.getenv("SUPABASE_URL"))
+if not _raw_supabase_url and DATABASE_URL_RAW:
     import re
-    # Automatically infer Supabase project URL from DATABASE_URL if available
-    ref_match = re.search(r"db\.([a-z0-9_-]+)\.supabase\.co", DATABASE_URL_RAW) or re.search(
-        r"postgres\.([a-z0-9_-]+):", DATABASE_URL_RAW
+    db_raw_str = str(DATABASE_URL_RAW)
+    ref_match = re.search(r"db\.([a-z0-9_-]+)\.supabase\.co", db_raw_str) or re.search(
+        r"postgres\.([a-z0-9_-]+):", db_raw_str
     )
     if ref_match:
-        SUPABASE_URL = f"https://{ref_match.group(1)}.supabase.co"
+        _raw_supabase_url = f"https://{ref_match.group(1)}.supabase.co"
 
-SUPABASE_SERVICE_ROLE_KEY = os.getenv("SUPABASE_SERVICE_ROLE_KEY") or os.getenv("SUPABASE_KEY")
-SUPABASE_STORAGE_BUCKET = os.getenv("SUPABASE_STORAGE_BUCKET", "documents")
-STORAGE_BACKEND = (os.getenv("STORAGE_BACKEND") or "auto").strip().lower()
+SUPABASE_URL = _raw_supabase_url.rstrip("/") if _raw_supabase_url else None
+
+SUPABASE_SERVICE_ROLE_KEY = _clean_env_str(
+    os.getenv("SUPABASE_SERVICE_ROLE_KEY")
+    or os.getenv("SUPABASE_SERVICE_KEY")
+    or os.getenv("SUPABASE_KEY")
+    or os.getenv("SUPABASE_SECRET_KEY")
+    or os.getenv("SUPABASE_ANON_KEY")
+)
+
+SUPABASE_STORAGE_BUCKET = _clean_env_str(os.getenv("SUPABASE_STORAGE_BUCKET")) or "documents"
+STORAGE_BACKEND = (_clean_env_str(os.getenv("STORAGE_BACKEND")) or "auto").lower()
+
 
 
 

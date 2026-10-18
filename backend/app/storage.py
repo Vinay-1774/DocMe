@@ -140,7 +140,10 @@ class StorageManager:
             return False
 
     def download_from_supabase(self, storage_key: str) -> Optional[bytes]:
-        """Downloads file content from the private Supabase Storage bucket."""
+        """
+        Downloads file content from Supabase Storage bucket.
+        Supports both private (authenticated) and public buckets.
+        """
         if not self.is_supabase_storage_enabled():
             return None
 
@@ -148,19 +151,31 @@ class StorageManager:
         if not clean_key:
             return None
 
-        url = f"{self.supabase_url}/storage/v1/object/authenticated/{self.bucket_name}/{clean_key}"
         headers = {
             "Authorization": f"Bearer {self.supabase_key}",
             "apikey": self.supabase_key,
         }
 
+        candidate_keys = [clean_key]
+        if storage_key and storage_key != clean_key:
+            candidate_keys.append(storage_key)
+
         try:
             with httpx.Client(timeout=45.0) as client:
-                res = client.get(url, headers=headers)
-                if res.status_code == 200:
-                    return res.content
-                if res.status_code != 404:
-                    logger.warning("Supabase Storage download returned HTTP %s for key '%s': %s", res.status_code, clean_key, res.text)
+                for key_to_try in candidate_keys:
+                    # 1. Try authenticated endpoint (private bucket default)
+                    auth_url = f"{self.supabase_url}/storage/v1/object/authenticated/{self.bucket_name}/{key_to_try}"
+                    res = client.get(auth_url, headers=headers)
+                    if res.status_code == 200:
+                        return res.content
+
+                    # 2. Try public endpoint (in case bucket was created as public in Supabase)
+                    pub_url = f"{self.supabase_url}/storage/v1/object/public/{self.bucket_name}/{key_to_try}"
+                    res_pub = client.get(pub_url, headers=headers)
+                    if res_pub.status_code == 200:
+                        return res_pub.content
+
+                logger.warning("Object '%s' not found in Supabase Storage bucket '%s'.", clean_key, self.bucket_name)
                 return None
         except Exception as e:
             logger.warning("Exception downloading '%s' from Supabase Storage: %s", clean_key, e)
