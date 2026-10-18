@@ -1,6 +1,6 @@
 # DocMe — Research & Document Intelligence Platform
 
-DocMe is an end-to-end, production-ready research intelligence platform designed for researchers, academics, and engineering teams. Users can upload research papers, academic articles, and technical documentation across multiple formats (PDF, DOCX, TXT), automatically extract and chunk text content, compute semantic embeddings using Google Gemini (`text-embedding-004`), index high-dimensional vectors in PostgreSQL using `pgvector`, and perform grounded conversational question-answering with real-time streaming citations orchestrated via LangGraph workflows.
+DocMe is an end-to-end, production-ready research intelligence platform designed for researchers, academics, and engineering teams. Users can upload research papers, academic articles, and technical documentation across multiple formats (PDF, DOCX, TXT), perform grounded conversational question-answering with real-time streaming citations orchestrated via LangGraph workflows.
 
 ---
 
