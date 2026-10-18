@@ -49,53 +49,53 @@ Access the production deployment of DocMe:
 .
 ├── backend/
 │   ├── app/
-│   │   ├── auth.py              # JWT tokens, password hashing, and user dependencies
-│   │   ├── chat.py              # Conversational chat handler and SSE streaming logic
-│   │   ├── config.py            # Environment settings and configuration parsing
-│   │   ├── database.py          # SQLAlchemy engine, session maker, and sequence synchronizer
-│   │   ├── ingestion.py         # Multi-format document parsing (PDF, DOCX, TXT) and chunking
-│   │   ├── main.py              # FastAPI application instance, CORS, and route definitions
-│   │   ├── models.py            # SQLAlchemy database models (User, Document, Chunk, Comment)
-│   │   ├── nodes.py             # LangGraph state nodes for context retrieval and synthesis
-│   │   ├── retrieval.py         # Semantic vector retrieval over pgvector
-│   │   ├── schema.py            # Pydantic v2 validation models and schemas
-│   │   ├── semantic_search.py   # Vector similarity functions and embedding generators
-│   │   ├── storage.py           # Persistent storage manager (Supabase Storage + local cache)
-│   │   └── workflow.py          # Compiled LangGraph Q&A state graph
-│   └── uploads/                 # Local directory for cached document files
+│   │   ├── auth.py              
+│   │   ├── chat.py              
+│   │   ├── config.py            
+│   │   ├── database.py          
+│   │   ├── ingestion.py         
+│   │   ├── main.py              
+│   │   ├── models.py            
+│   │   ├── nodes.py             
+│   │   ├── retrieval.py          
+│   │   ├── schema.py            
+│   │   ├── semantic_search.py   
+│   │   ├── storage.py           
+│   │   └── workflow.py          
+│   └── uploads/                 
 ├── frontend/
-│   ├── index.html               # Landing page and platform introduction
+│   ├── index.html               
 │   ├── pages/
-│   │   ├── document-chat.html   # Split-screen document viewer and conversational Q&A interface
-│   │   ├── feed.html            # Research document feed, search, and rankings
-│   │   ├── login.html           # Authentication and login interface
-│   │   ├── profile.html         # User profile, uploaded documents manager, and stats
-│   │   └── register.html        # Direct account registration interface
+│   │   ├── document-chat.html   
+│   │   ├── feed.html            
+│   │   ├── login.html           
+│   │   ├── profile.html         
+│   │   └── register.html        
 │   ├── shared/
-│   │   ├── api.js               # Centralized API fetch wrapper and token refresher
-│   │   ├── auth.js              # Client authentication state management
-│   │   ├── env.js               # Runtime configuration populated during build
-│   │   └── styles.css           # Global CSS variables, reset, layout, and component styling
-│   └── vercel.json              # Vercel deployment routing and cache header configuration
+│   │   ├── api.js               
+│   │   ├── auth.js              
+│   │   ├── env.js               
+│   │   └── styles.css           
+│   └── vercel.json              
 ├── scripts/
-│   ├── build.js                 # Deployment script injecting backend API URL into frontend
-│   └── migrate_to_supabase_storage.py # Migration tool to transfer local files to Supabase Storage
+│   ├── build.js                 
+│   └── migrate_to_supabase_storage.py 
 ├── tests/
-│   ├── test_backend.py          # Pytest suite for API endpoints and document workflows
-│   ├── test_chat_diagnostics.py # Tests for chat retrieval and LangGraph execution
-│   ├── test_session_isolation.py# Tests for multi-user session boundaries and private doc security
-│   ├── test_simplified_auth.py  # Tests for direct registration, login, and sequence sync
-│   ├── test_backend_url_config.mjs # Frontend test verifying build URL injection
-│   ├── test_document_deletion_frontend.mjs # Frontend test for document deletion workflows
-│   ├── test_frontend_auth.mjs   # Frontend test for token persistence and session expiry
-│   ├── test_frontend_otp.mjs    # Frontend test verifying absence of obsolete OTP forms
-│   ├── test_profile_upload.mjs  # Frontend test for upload modal interactions
-│   └── test_responsiveness.mjs  # Frontend responsive layout validation
-├── .env.example                 # Comprehensive environment variable template
-├── package.json                 # Node.js project manifest and frontend test scripts
-├── requirements.txt             # Python dependencies manifest
-├── vercel.json                  # Root Vercel configuration
-└── README.md                    # Project documentation
+│   ├── test_backend.py          
+│   ├── test_chat_diagnostics.py 
+│   ├── test_session_isolation.py
+│   ├── test_simplified_auth.py 
+│   ├── test_backend_url_config.mjs 
+│   ├── test_document_deletion_frontend.mjs 
+│   ├── test_frontend_auth.mjs   
+│   ├── test_frontend_otp.mjs    
+│   ├── test_profile_upload.mjs  
+│   └── test_responsiveness.mjs  
+├── .env.example                 
+├── package.json                 
+├── requirements.txt             
+├── vercel.json                  
+└── README.md                    
 ```
 
 
