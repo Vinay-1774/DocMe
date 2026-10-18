@@ -8,7 +8,6 @@ import logging
 import os
 from pathlib import Path
 from typing import Optional
-from uuid import uuid4
 
 import httpx
 from fastapi import HTTPException, status

@@ -10,7 +10,6 @@ from jwt.exceptions import PyJWTError as JWTError
 from sqlalchemy import select
 from sqlalchemy.orm import Session
 
-from . import config
 from .config import (
     ACCESS_TOKEN_EXPIRE_MINUTES,
     JWT_ALGORITHM,
@@ -170,30 +169,39 @@ def login_oauth2(form_data: OAuth2PasswordRequestForm, db: Session) -> dict:
     return authenticate_user_by_email(email=form_data.username, password=form_data.password, db=db)
 
 
+def decode_access_token_user_id(token: Optional[str]) -> Optional[int]:
+    """Decodes a JWT access token and returns the user ID integer, or None if invalid or expired."""
+    if not token or not JWT_SECRET_KEY:
+        return None
+    try:
+        payload = jwt.decode(token, JWT_SECRET_KEY, algorithms=[JWT_ALGORITHM])
+        if payload.get("type") != "access":
+            return None
+        user_id_raw: Optional[str] = payload.get("sub")
+        if user_id_raw is None:
+            return None
+        return int(user_id_raw)
+    except (JWTError, ValueError):
+        return None
+
+
 # --- Current-User Dependency ---
 def get_current_user(
     token: str = Depends(oauth2_scheme),
     db: Session = Depends(get_db),
 ) -> User:
     """FastAPI dependency to extract, validate the JWT bearer token, and return the authenticated user."""
+    if not JWT_SECRET_KEY:
+        raise RuntimeError("JWT_SECRET_KEY environment variable is not configured.")
+
     credentials_exception = HTTPException(
         status_code=status.HTTP_401_UNAUTHORIZED,
         detail="Could not validate credentials",
         headers={"WWW-Authenticate": "Bearer"},
     )
 
-    if not JWT_SECRET_KEY:
-        raise RuntimeError("JWT_SECRET_KEY environment variable is not configured.")
-
-    try:
-        payload = jwt.decode(token, JWT_SECRET_KEY, algorithms=[JWT_ALGORITHM])
-        if payload.get("type") != "access":
-            raise credentials_exception
-        user_id_raw: Optional[str] = payload.get("sub")
-        if user_id_raw is None:
-            raise credentials_exception
-        user_id = int(user_id_raw)
-    except (JWTError, ValueError):
+    user_id = decode_access_token_user_id(token)
+    if user_id is None:
         raise credentials_exception
 
     user = db.scalar(select(User).where(User.id == user_id))
@@ -208,18 +216,9 @@ def get_optional_current_user(
     db: Session = Depends(get_db),
 ) -> Optional[User]:
     """Extracts authenticated user if valid Bearer token is provided; returns None if unauthenticated."""
-    if not token or not JWT_SECRET_KEY:
-        return None
-
-    try:
-        payload = jwt.decode(token, JWT_SECRET_KEY, algorithms=[JWT_ALGORITHM])
-        if payload.get("type") != "access":
-            return None
-        user_id_raw: Optional[str] = payload.get("sub")
-        if user_id_raw is None:
-            return None
-        user_id = int(user_id_raw)
-    except (JWTError, ValueError):
+    user_id = decode_access_token_user_id(token)
+    if user_id is None:
         return None
 
     return db.scalar(select(User).where(User.id == user_id))
+

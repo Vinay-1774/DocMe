@@ -35,10 +35,6 @@ class TokenResponse(BaseModel):
 
 # --- Document Schemas ---
 
-class DocumentCreate(BaseModel):
-    title: str
-    description: Optional[str] = None
-    visibility: Literal["public", "private"] = "public"
 
 
 class DocumentResponse(BaseModel):

@@ -105,6 +105,3 @@ def perform_semantic_search(
 
     return combined_results
 
-
-# Alias for compatibility with varying function name expectations
-search_documents = perform_semantic_search

@@ -40,14 +40,6 @@ def _parse_bool(key: str, default: bool = False) -> bool:
     return val.strip().lower() in ("true", "1", "yes", "on")
 
 
-def _parse_list(key: str) -> list[str]:
-    """Parse a comma-separated list environment variable."""
-    val = os.getenv(key)
-    if not val:
-        return []
-    return [item.strip() for item in val.split(",") if item.strip()]
-
-
 # --- Database Configuration (PostgreSQL with pgvector / Supabase) ---
 DATABASE_URL_RAW = os.getenv("DATABASE_URL")
 
@@ -101,9 +93,6 @@ if not JWT_SECRET_KEY:
 JWT_ALGORITHM = os.getenv("JWT_ALGORITHM")
 if not JWT_ALGORITHM:
     raise ValueError("Missing required configuration: 'JWT_ALGORITHM' must be set in environment or .env")
-
-SECRET_KEY = JWT_SECRET_KEY
-ALGORITHM = JWT_ALGORITHM
 
 ACCESS_TOKEN_EXPIRE_MINUTES = _parse_int("ACCESS_TOKEN_EXPIRE_MINUTES", required=True)
 REFRESH_TOKEN_EXPIRE_DAYS = _parse_int("REFRESH_TOKEN_EXPIRE_DAYS", required=True)
@@ -170,8 +159,6 @@ DEFAULT_ALLOWED_ORIGINS = [
     "http://127.0.0.1:8080",
     "https://docme-frontend.vercel.app",
 ]
-
-DEFAULT_LOCALHOST_ORIGINS = DEFAULT_ALLOWED_ORIGINS
 
 
 def _parse_cors_origins(key: str = "CORS_ORIGINS") -> list[str]:

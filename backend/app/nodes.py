@@ -65,10 +65,7 @@ def generate_node(state: GraphState) -> dict:
     documents = state.get("documents", [])
     sources = state.get("sources", [])
 
-    try:
-        answer = generate_response(question=question, context=documents, sources=sources)
-    except TypeError:
-        answer = generate_response(question=question, context=documents)
+    answer = generate_response(question=question, context=documents, sources=sources)
 
     t_node_ms = (time.perf_counter() - t_start) * 1000
     logger.info("LangGraph node [generate] executed in %.2fms", t_node_ms)

@@ -7,9 +7,9 @@ from typing import List, Literal, Optional
 
 from fastapi import Depends, FastAPI, File, Form, HTTPException, Query, Request, Response, UploadFile, status
 from fastapi.middleware.cors import CORSMiddleware
-from fastapi.responses import FileResponse, StreamingResponse
+from fastapi.responses import StreamingResponse
 from fastapi.security import OAuth2PasswordRequestForm
-from sqlalchemy import func, or_, select
+from sqlalchemy import func, select
 from sqlalchemy.orm import Session
 
 from starlette.datastructures import Headers
@@ -298,8 +298,8 @@ def logout(response: Response):
     response.delete_cookie(
         key="rp_refresh_token",
         path="/",
-        secure=COOKIE_SECURE,
-        samesite=COOKIE_SAMESITE,
+        secure=config.COOKIE_SECURE,
+        samesite=config.COOKIE_SAMESITE,
         httponly=True,
     )
     return {"message": "Logged out successfully"}
