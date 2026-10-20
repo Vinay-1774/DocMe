@@ -11,9 +11,10 @@ from typing import Optional
 
 import httpx
 from fastapi import HTTPException, status
-from fastapi.responses import FileResponse
+from fastapi.responses import FileResponse, Response
 
 from .config import (
+    IS_PRODUCTION,
     STORAGE_BACKEND,
     SUPABASE_SERVICE_ROLE_KEY,
     SUPABASE_STORAGE_BUCKET,
@@ -47,13 +48,38 @@ class StorageManager:
         self.bucket_name = bucket_name or "documents"
         self.backend_mode = (backend_mode or "auto").strip().lower()
         self._bucket_checked = False
+        self._last_status_code: Optional[int] = None
+        self._last_error: Optional[str] = None
         self.upload_dir.mkdir(parents=True, exist_ok=True)
 
     def is_supabase_storage_enabled(self) -> bool:
         """Returns True if Supabase Storage credentials are configured and not explicitly disabled."""
         if self.backend_mode == "local":
             return False
-        return bool(self.supabase_url and self.supabase_key)
+        url = self.supabase_url or os.getenv("SUPABASE_URL")
+        key = (
+            self.supabase_key
+            or os.getenv("SUPABASE_SERVICE_ROLE_KEY")
+            or os.getenv("SUPABASE_SERVICE_KEY")
+            or os.getenv("SUPABASE_KEY")
+            or os.getenv("SUPABASE_SECRET_KEY")
+        )
+        return bool(url and key)
+
+    def is_production_mode(self) -> bool:
+        """
+        Determines whether the application is running in a production or ephemeral environment
+        (e.g., Render, Kubernetes, or explicit ENVIRONMENT=production).
+        """
+        if self.backend_mode == "supabase":
+            return True
+        env = (os.getenv("ENVIRONMENT") or "").strip().lower()
+        if env == "production":
+            return True
+        render = (os.getenv("RENDER") or os.getenv("IS_RENDER") or "").strip().lower()
+        if render in ("true", "1", "yes"):
+            return True
+        return bool(IS_PRODUCTION)
 
     def get_storage_key(self, file_path_or_key: str) -> str:
         """
@@ -78,21 +104,29 @@ class StorageManager:
         if self._bucket_checked:
             return True
 
+        key = (
+            self.supabase_key
+            or os.getenv("SUPABASE_SERVICE_ROLE_KEY")
+            or os.getenv("SUPABASE_SERVICE_KEY")
+            or os.getenv("SUPABASE_KEY")
+            or os.getenv("SUPABASE_SECRET_KEY")
+        )
+        url = (self.supabase_url or os.getenv("SUPABASE_URL", "")).rstrip("/")
         headers = {
-            "Authorization": f"Bearer {self.supabase_key}",
-            "apikey": self.supabase_key,
+            "Authorization": f"Bearer {key}",
+            "apikey": key,
         }
 
         try:
             with httpx.Client(timeout=10.0) as client:
-                bucket_url = f"{self.supabase_url}/storage/v1/bucket/{self.bucket_name}"
+                bucket_url = f"{url}/storage/v1/bucket/{self.bucket_name}"
                 res = client.get(bucket_url, headers=headers)
                 if res.status_code == 200:
                     self._bucket_checked = True
                     return True
 
-                if res.status_code == 404:
-                    create_url = f"{self.supabase_url}/storage/v1/bucket"
+                if res.status_code in (404, 400) and ("not found" in res.text.lower() or res.status_code == 404):
+                    create_url = f"{url}/storage/v1/bucket"
                     create_res = client.post(
                         create_url,
                         json={"id": self.bucket_name, "name": self.bucket_name, "public": False},
@@ -105,7 +139,7 @@ class StorageManager:
                     logger.error("Failed to create Supabase bucket '%s': %s", self.bucket_name, create_res.text)
                     return False
 
-                # If status is not 404, assume bucket exists or will be verified on operation
+                # If status is not 404/400, assume bucket exists or will be verified on operation
                 self._bucket_checked = True
                 return True
         except Exception as e:
@@ -117,31 +151,66 @@ class StorageManager:
         if not self.is_supabase_storage_enabled():
             return False
 
+        clean_key = self.get_storage_key(storage_key)
+        if not clean_key:
+            logger.error("Cannot upload to Supabase Storage: invalid or empty storage key.")
+            return False
+
         self.ensure_bucket_exists()
-        url = f"{self.supabase_url}/storage/v1/object/{self.bucket_name}/{storage_key}"
+        key = (
+            self.supabase_key
+            or os.getenv("SUPABASE_SERVICE_ROLE_KEY")
+            or os.getenv("SUPABASE_SERVICE_KEY")
+            or os.getenv("SUPABASE_KEY")
+            or os.getenv("SUPABASE_SECRET_KEY")
+        )
+        url = (self.supabase_url or os.getenv("SUPABASE_URL", "")).rstrip("/")
+        obj_url = f"{url}/storage/v1/object/{self.bucket_name}/{clean_key}"
         headers = {
-            "Authorization": f"Bearer {self.supabase_key}",
-            "apikey": self.supabase_key,
+            "Authorization": f"Bearer {key}",
+            "apikey": key,
             "Content-Type": media_type or "application/octet-stream",
             "x-upsert": "true",
         }
 
         try:
             with httpx.Client(timeout=45.0) as client:
-                res = client.post(url, content=content, headers=headers)
+                res = client.post(obj_url, content=content, headers=headers)
                 if res.status_code in (200, 201):
-                    logger.info("Successfully uploaded object '%s' to Supabase Storage bucket '%s'.", storage_key, self.bucket_name)
+                    logger.info("Successfully uploaded object '%s' to Supabase Storage bucket '%s'.", clean_key, self.bucket_name)
+                    self._last_status_code = res.status_code
                     return True
-                logger.error("Failed to upload '%s' to Supabase Storage: HTTP %s: %s", storage_key, res.status_code, res.text)
+
+                # If POST fails with 400/409 duplicate, attempt PUT for upsert compatibility
+                if res.status_code in (400, 409):
+                    put_res = client.put(obj_url, content=content, headers=headers)
+                    if put_res.status_code in (200, 201):
+                        logger.info("Successfully upserted object '%s' to Supabase Storage via PUT.", clean_key)
+                        self._last_status_code = put_res.status_code
+                        return True
+
+                self._last_status_code = res.status_code
+                self._last_error = res.text
+                if res.status_code in (401, 403):
+                    logger.critical("Supabase Storage permission failure for object '%s': HTTP %s: %s", clean_key, res.status_code, res.text)
+                else:
+                    logger.error("Failed to upload '%s' to Supabase Storage: HTTP %s: %s", clean_key, res.status_code, res.text)
                 return False
+        except httpx.TimeoutException as exc:
+            self._last_status_code = 504
+            self._last_error = str(exc)
+            logger.error("Timeout uploading '%s' to Supabase Storage: %s", clean_key, exc)
+            return False
         except Exception as e:
-            logger.error("Exception during Supabase Storage upload for '%s': %s", storage_key, e, exc_info=True)
+            self._last_status_code = 500
+            self._last_error = str(e)
+            logger.error("Exception during Supabase Storage upload for '%s': %s", clean_key, e, exc_info=True)
             return False
 
     def download_from_supabase(self, storage_key: str) -> Optional[bytes]:
         """
         Downloads file content from Supabase Storage bucket.
-        Supports both private (authenticated) and public buckets.
+        Supports private (authenticated), direct object, signed URL, and public endpoints.
         """
         if not self.is_supabase_storage_enabled():
             return None
@@ -150,33 +219,73 @@ class StorageManager:
         if not clean_key:
             return None
 
+        key = (
+            self.supabase_key
+            or os.getenv("SUPABASE_SERVICE_ROLE_KEY")
+            or os.getenv("SUPABASE_SERVICE_KEY")
+            or os.getenv("SUPABASE_KEY")
+            or os.getenv("SUPABASE_SECRET_KEY")
+        )
+        url = (self.supabase_url or os.getenv("SUPABASE_URL", "")).rstrip("/")
         headers = {
-            "Authorization": f"Bearer {self.supabase_key}",
-            "apikey": self.supabase_key,
+            "Authorization": f"Bearer {key}",
+            "apikey": key,
         }
 
         candidate_keys = [clean_key]
         if storage_key and storage_key != clean_key:
             candidate_keys.append(storage_key)
 
+        last_code = 404
         try:
             with httpx.Client(timeout=45.0) as client:
                 for key_to_try in candidate_keys:
                     # 1. Try authenticated endpoint (private bucket default)
-                    auth_url = f"{self.supabase_url}/storage/v1/object/authenticated/{self.bucket_name}/{key_to_try}"
+                    auth_url = f"{url}/storage/v1/object/authenticated/{self.bucket_name}/{key_to_try}"
                     res = client.get(auth_url, headers=headers)
-                    if res.status_code == 200:
+                    if res.status_code == 200 and res.content:
+                        self._last_status_code = 200
                         return res.content
+                    last_code = res.status_code
 
-                    # 2. Try public endpoint (in case bucket was created as public in Supabase)
-                    pub_url = f"{self.supabase_url}/storage/v1/object/public/{self.bucket_name}/{key_to_try}"
+                    # 2. Try direct object endpoint
+                    obj_url = f"{url}/storage/v1/object/{self.bucket_name}/{key_to_try}"
+                    res_obj = client.get(obj_url, headers=headers)
+                    if res_obj.status_code == 200 and res_obj.content:
+                        self._last_status_code = 200
+                        return res_obj.content
+
+                    # 3. Try signed URL fallback
+                    signed_url = self.create_signed_url(key_to_try, expires_in=120)
+                    if signed_url:
+                        res_signed = client.get(signed_url)
+                        if res_signed.status_code == 200 and res_signed.content:
+                            self._last_status_code = 200
+                            return res_signed.content
+
+                    # 4. Try public endpoint (in case bucket was created as public in Supabase)
+                    pub_url = f"{url}/storage/v1/object/public/{self.bucket_name}/{key_to_try}"
                     res_pub = client.get(pub_url, headers=headers)
-                    if res_pub.status_code == 200:
+                    if res_pub.status_code == 200 and res_pub.content:
+                        self._last_status_code = 200
                         return res_pub.content
 
-                logger.warning("Object '%s' not found in Supabase Storage bucket '%s'.", clean_key, self.bucket_name)
+                self._last_status_code = last_code
+                if last_code in (401, 403):
+                    logger.critical("Supabase Storage permission failure for object '%s' in bucket '%s': HTTP %s", clean_key, self.bucket_name, last_code)
+                elif last_code == 404:
+                    logger.warning("Object '%s' not found in Supabase Storage bucket '%s'.", clean_key, self.bucket_name)
+                else:
+                    logger.warning("Failed to download object '%s' from Supabase Storage: HTTP %s", clean_key, last_code)
                 return None
+        except httpx.TimeoutException as exc:
+            self._last_status_code = 504
+            self._last_error = str(exc)
+            logger.error("Timeout downloading '%s' from Supabase Storage: %s", clean_key, exc)
+            return None
         except Exception as e:
+            self._last_status_code = 500
+            self._last_error = str(e)
             logger.warning("Exception downloading '%s' from Supabase Storage: %s", clean_key, e)
             return None
 
@@ -189,16 +298,24 @@ class StorageManager:
         if not clean_key:
             return False
 
-        url = f"{self.supabase_url}/storage/v1/object/{self.bucket_name}"
+        key = (
+            self.supabase_key
+            or os.getenv("SUPABASE_SERVICE_ROLE_KEY")
+            or os.getenv("SUPABASE_SERVICE_KEY")
+            or os.getenv("SUPABASE_KEY")
+            or os.getenv("SUPABASE_SECRET_KEY")
+        )
+        url = (self.supabase_url or os.getenv("SUPABASE_URL", "")).rstrip("/")
+        del_url = f"{url}/storage/v1/object/{self.bucket_name}"
         headers = {
-            "Authorization": f"Bearer {self.supabase_key}",
-            "apikey": self.supabase_key,
+            "Authorization": f"Bearer {key}",
+            "apikey": key,
             "Content-Type": "application/json",
         }
 
         try:
             with httpx.Client(timeout=15.0) as client:
-                res = client.request("DELETE", url, json={"prefixes": [clean_key]}, headers=headers)
+                res = client.request("DELETE", del_url, json={"prefixes": [clean_key]}, headers=headers)
                 return res.status_code == 200
         except Exception as e:
             logger.warning("Failed to delete '%s' from Supabase Storage: %s", clean_key, e)
@@ -216,21 +333,31 @@ class StorageManager:
         if not clean_key:
             return None
 
-        url = f"{self.supabase_url}/storage/v1/object/sign/{self.bucket_name}/{clean_key}"
+        key = (
+            self.supabase_key
+            or os.getenv("SUPABASE_SERVICE_ROLE_KEY")
+            or os.getenv("SUPABASE_SERVICE_KEY")
+            or os.getenv("SUPABASE_KEY")
+            or os.getenv("SUPABASE_SECRET_KEY")
+        )
+        url = (self.supabase_url or os.getenv("SUPABASE_URL", "")).rstrip("/")
+        sign_url = f"{url}/storage/v1/object/sign/{self.bucket_name}/{clean_key}"
         headers = {
-            "Authorization": f"Bearer {self.supabase_key}",
-            "apikey": self.supabase_key,
+            "Authorization": f"Bearer {key}",
+            "apikey": key,
             "Content-Type": "application/json",
         }
 
         try:
             with httpx.Client(timeout=10.0) as client:
-                res = client.post(url, json={"expiresIn": expires_in}, headers=headers)
+                res = client.post(sign_url, json={"expiresIn": expires_in}, headers=headers)
                 if res.status_code == 200:
                     data = res.json()
                     signed_path = data.get("signedURL")
                     if signed_path:
-                        return f"{self.supabase_url}{signed_path}"
+                        if signed_path.startswith("http://") or signed_path.startswith("https://"):
+                            return signed_path
+                        return f"{url}{signed_path}"
         except Exception as e:
             logger.warning("Failed to generate signed URL for '%s': %s", clean_key, e)
         return None
@@ -268,6 +395,7 @@ class StorageManager:
             remote_bytes = self.download_from_supabase(clean_key)
             if remote_bytes:
                 try:
+                    self.upload_dir.mkdir(parents=True, exist_ok=True)
                     with open(local_cached_path, "wb") as f:
                         f.write(remote_bytes)
                     logger.info("Retrieved and locally cached '%s' from Supabase Storage.", clean_key)
@@ -314,25 +442,84 @@ class StorageManager:
         - Resolves local path or fetches from persistent Supabase Storage.
         - Sets correct filename, media type, and content disposition.
         - Supports inline rendering (PDF viewer) and attachment downloads.
-        - Raises HTTP 404 if the document file cannot be found in server or cloud storage.
+        - Distinguishes missing objects, timeouts, and permission errors with safe, specific status codes.
         """
-        local_path = self.resolve_local_file_path(doc.file_path)
-        if not local_path or not local_path.is_file():
-            logger.error("Document ID %s (file_path: %s) not found in local or cloud storage.", doc.id, doc.file_path)
-            raise HTTPException(
-                status_code=status.HTTP_404_NOT_FOUND,
-                detail="Document file was not found on the server storage. This document may have been uploaded prior to persistent cloud storage setup. Please re-upload the document.",
-            )
-
         download_name = f"{doc.title}.{doc.file_type}"
         is_pdf = (doc.file_type or "").lower() == "pdf"
         media_type = "application/pdf" if is_pdf else "application/octet-stream"
+        disposition_type = "inline" if inline else "attachment"
 
-        return FileResponse(
-            path=str(local_path),
-            filename=download_name,
-            media_type=media_type,
-            content_disposition_type="inline" if inline else "attachment",
+        # 1. Try local resolution (disk or local cache)
+        local_path = self.resolve_local_file_path(doc.file_path)
+        if local_path and local_path.is_file():
+            return FileResponse(
+                path=str(local_path),
+                filename=download_name,
+                media_type=media_type,
+                content_disposition_type=disposition_type,
+            )
+
+        clean_key = self.get_storage_key(doc.file_path)
+        if not clean_key:
+            logger.error("Document ID %s has invalid/empty storage key: '%s'", doc.id, doc.file_path)
+            raise HTTPException(
+                status_code=status.HTTP_404_NOT_FOUND,
+                detail="Invalid document storage reference. Please re-upload the document.",
+            )
+
+        # 2. If not on local disk and Supabase is enabled, attempt direct cloud download
+        if self.is_supabase_storage_enabled():
+            remote_bytes = self.download_from_supabase(clean_key)
+            if remote_bytes:
+                # Try writing cache for next request
+                try:
+                    self.upload_dir.mkdir(parents=True, exist_ok=True)
+                    cached_file = self.upload_dir / clean_key
+                    with open(cached_file, "wb") as f:
+                        f.write(remote_bytes)
+                    return FileResponse(
+                        path=str(cached_file),
+                        filename=download_name,
+                        media_type=media_type,
+                        content_disposition_type=disposition_type,
+                    )
+                except Exception as write_err:
+                    logger.warning("Could not write cache file '%s' (serving bytes directly): %s", clean_key, write_err)
+
+                # Serve bytes directly if caching failed
+                return Response(
+                    content=remote_bytes,
+                    media_type=media_type,
+                    headers={
+                        "Content-Disposition": f'{disposition_type}; filename="{download_name}"',
+                    },
+                )
+
+            # Cloud fetch failed — inspect status code for clear, safe user-facing message
+            last_code = getattr(self, "_last_status_code", None)
+            if last_code == 504:
+                logger.error("Supabase Storage timeout retrieving document %s (key: %s)", doc.id, clean_key)
+                raise HTTPException(
+                    status_code=status.HTTP_504_GATEWAY_TIMEOUT,
+                    detail="Cloud storage request timed out. Please try again shortly.",
+                )
+            if last_code in (401, 403):
+                logger.critical("Supabase Storage permission failure for document %s (key: %s)", doc.id, clean_key)
+                raise HTTPException(
+                    status_code=status.HTTP_502_BAD_GATEWAY,
+                    detail="Storage service authorization failure. Please contact administrator.",
+                )
+            if last_code in (500, 502, 503):
+                logger.error("Supabase Storage temporary error (HTTP %s) for document %s (key: %s)", last_code, doc.id, clean_key)
+                raise HTTPException(
+                    status_code=status.HTTP_503_SERVICE_UNAVAILABLE,
+                    detail="Cloud storage service temporarily unavailable. Please try again shortly.",
+                )
+
+        logger.error("Document ID %s (file_path: %s, key: %s) not found in local or cloud storage.", doc.id, doc.file_path, clean_key)
+        raise HTTPException(
+            status_code=status.HTTP_404_NOT_FOUND,
+            detail="Document file was not found on the server storage. This document may have been uploaded prior to persistent cloud storage setup. Please re-upload the document.",
         )
 
 

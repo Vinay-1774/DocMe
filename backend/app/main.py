@@ -82,15 +82,21 @@ async def lifespan(app: FastAPI):
         init_db()
         logger.info("Database schema initialized successfully.")
         if storage_manager.is_supabase_storage_enabled():
+            storage_manager.ensure_bucket_exists()
             logger.info(
                 "Persistent Supabase Storage is ENABLED (bucket: '%s', url: %s).",
                 storage_manager.bucket_name,
                 storage_manager.supabase_url,
             )
+        elif storage_manager.is_production_mode():
+            logger.critical(
+                "PRODUCTION ALERT: Render/production environment detected, but persistent Supabase Storage is NOT enabled! "
+                "Document files on Render's ephemeral filesystem will be wiped upon container restart. "
+                "Configure SUPABASE_URL and SUPABASE_SERVICE_ROLE_KEY to persist files permanently."
+            )
         else:
-            logger.warning(
-                "Persistent Supabase Storage is NOT enabled. Storing files locally in %s. "
-                "Set SUPABASE_URL and SUPABASE_SERVICE_ROLE_KEY to persist files across Render deployments.",
+            logger.info(
+                "Persistent Supabase Storage is not enabled. Storing files locally in %s for development.",
                 storage_manager.upload_dir,
             )
     except Exception as exc:
@@ -165,6 +171,7 @@ def root():
             "backend": "supabase" if storage_manager.is_supabase_storage_enabled() else "local",
             "persistent_cloud_storage": storage_manager.is_supabase_storage_enabled(),
             "bucket": storage_manager.bucket_name if storage_manager.is_supabase_storage_enabled() else None,
+            "production_mode": storage_manager.is_production_mode(),
         },
     }
 
@@ -598,8 +605,17 @@ def upload_document(
             except Exception as hash_err:
                 logger.warning("Error checking file hash for doc %s: %s", existing_doc.id, hash_err)
 
-    # 2. Upload to persistent Supabase Storage if enabled
+    # 2. Upload to persistent Supabase Storage if enabled, or enforce in production
     supabase_uploaded = False
+    if storage_manager.is_production_mode() and not storage_manager.is_supabase_storage_enabled():
+        if file_created and saved_file_path.is_file():
+            saved_file_path.unlink(missing_ok=True)
+        logger.critical("Document upload rejected: Persistent Supabase Storage is not configured in production.")
+        raise HTTPException(
+            status_code=status.HTTP_500_INTERNAL_SERVER_ERROR,
+            detail="Persistent cloud storage is not configured. Document uploads in production require persistent cloud storage to ensure durability.",
+        )
+
     if storage_manager.is_supabase_storage_enabled():
         with open(saved_file_path, "rb") as f:
             file_bytes = f.read()

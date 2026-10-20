@@ -224,15 +224,29 @@ def _clean_env_str(val: Optional[str]) -> Optional[str]:
     cleaned = val.strip().strip("\"'").strip()
     return cleaned if cleaned else None
 
+# Environment and platform detection
+IS_RENDER = _parse_bool("RENDER", default=False) or _parse_bool("IS_RENDER", default=False)
+ENVIRONMENT = (os.getenv("ENVIRONMENT") or "development").strip().lower()
+IS_PRODUCTION = (ENVIRONMENT == "production") or IS_RENDER
+
 _raw_supabase_url = _clean_env_str(os.getenv("SUPABASE_URL"))
-if not _raw_supabase_url and DATABASE_URL_RAW:
-    import re
-    db_raw_str = str(DATABASE_URL_RAW)
-    ref_match = re.search(r"db\.([a-z0-9_-]+)\.supabase\.co", db_raw_str) or re.search(
-        r"postgres\.([a-z0-9_-]+):", db_raw_str
+if not _raw_supabase_url:
+    # Check for direct project ref or project id
+    proj_ref = _clean_env_str(
+        os.getenv("SUPABASE_PROJECT_ID")
+        or os.getenv("SUPABASE_REF")
+        or os.getenv("SUPABASE_PROJECT_REF")
     )
-    if ref_match:
-        _raw_supabase_url = f"https://{ref_match.group(1)}.supabase.co"
+    if proj_ref:
+        _raw_supabase_url = f"https://{proj_ref}.supabase.co"
+    elif DATABASE_URL_RAW:
+        import re
+        db_raw_str = str(DATABASE_URL_RAW)
+        ref_match = re.search(r"db\.([a-z0-9_-]+)\.supabase\.co", db_raw_str) or re.search(
+            r"postgres\.([a-z0-9_-]+):", db_raw_str
+        )
+        if ref_match:
+            _raw_supabase_url = f"https://{ref_match.group(1)}.supabase.co"
 
 SUPABASE_URL = _raw_supabase_url.rstrip("/") if _raw_supabase_url else None
 

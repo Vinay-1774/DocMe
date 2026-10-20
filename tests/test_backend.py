@@ -2341,6 +2341,451 @@ def test_ingestion_failure_cleans_up_cloud_storage(client):
     assert doc_in_db is None
 
 
+# =====================================================================
+# Phase 3 Storage Permanence & Cross-Server Regression Tests
+# =====================================================================
+
+def test_regression_phase3_upload_and_retrieve_cloud_key(client):
+    """
+    Test 1: Upload a document and retrieve its bytes using the stored cloud key.
+    Verifies that:
+    1. In PostgreSQL, doc.file_path stores ONLY the clean cloud storage key (e.g. <uuid>.pdf),
+       NOT an ephemeral local filesystem path.
+    2. Retrieval via /download and /download?inline=true serves the exact uploaded bytes.
+    """
+    from backend.app.storage import storage_manager
+    from backend.app.models import Document
+
+    cloud_bucket = {}
+
+    def mock_upload(key, content, media_type=None):
+        cloud_bucket[key] = bytes(content)
+        return True
+
+    def mock_download(key):
+        return cloud_bucket.get(key)
+
+    token = _auth_user(client, "cloud_key_user", "cloud_key_user@example.com")
+    pdf_bytes = create_sample_pdf_bytes().getvalue()
+
+    with patch.object(storage_manager, "is_supabase_storage_enabled", return_value=True), \
+         patch.object(storage_manager, "upload_to_supabase", side_effect=mock_upload), \
+         patch.object(storage_manager, "download_from_supabase", side_effect=mock_download), \
+         patch("backend.app.ingestion.generate_embedding", side_effect=mock_generate_embedding), \
+         patch("backend.app.ingestion.generate_embeddings", side_effect=mock_generate_embeddings), \
+         patch("backend.app.ingestion.extract_text_and_metadata", return_value=[{"text": "Key test", "page_number": 1}]):
+
+        up_res = client.post(
+            "/documents",
+            headers={"Authorization": f"Bearer {token}"},
+            data={"title": "Cloud Key Document", "visibility": "public"},
+            files={"file": ("paper.pdf", io.BytesIO(pdf_bytes), "application/pdf")},
+        )
+        assert up_res.status_code == 201
+        doc_id = up_res.json()["id"]
+
+        # Verify PostgreSQL doc.file_path contains only the storage key
+        with TestSessionLocal() as db:
+            db_doc = db.query(Document).filter(Document.id == doc_id).first()
+            assert db_doc is not None
+            assert "/" not in db_doc.file_path
+            assert "\\" not in db_doc.file_path
+            assert db_doc.file_path.endswith(".pdf")
+            assert db_doc.file_path in cloud_bucket
+
+        # Download attachment
+        dl_res = client.get(f"/documents/{doc_id}/download")
+        assert dl_res.status_code == 200
+        assert dl_res.content == pdf_bytes
+        assert "attachment" in dl_res.headers["content-disposition"]
+
+        # Preview inline
+        prev_res = client.get(f"/documents/{doc_id}/download?inline=true")
+        assert prev_res.status_code == 200
+        assert prev_res.content == pdf_bytes
+        assert "inline" in prev_res.headers["content-disposition"]
+
+
+def test_regression_phase3_retrieve_when_local_cache_empty(client):
+    """
+    Test 2: Retrieve a cloud-stored document when the local cache is empty.
+    Verifies transparent retrieval and on-demand local cache restoration.
+    """
+    from backend.app.storage import storage_manager
+    from backend.app.config import UPLOAD_DIR
+    from backend.app.models import Document
+
+    cloud_bucket = {}
+    test_key = "cloud_cached_test_doc.pdf"
+    test_content = b"%PDF-1.4 Mock cloud stored PDF content for cache test"
+    cloud_bucket[test_key] = test_content
+
+    # Ensure local cache file is absent
+    cached_path = UPLOAD_DIR / test_key
+    if cached_path.is_file():
+        cached_path.unlink()
+    assert not cached_path.is_file()
+
+    token = _auth_user(client, "empty_cache_user", "empty_cache_user@example.com")
+    with TestSessionLocal() as db:
+        user = db.query(User).filter(User.username == "empty_cache_user").first()
+        doc = Document(
+            user_id=user.id,
+            title="Empty Cache Cloud Doc",
+            file_path=test_key,
+            file_type="pdf",
+            visibility="public",
+        )
+        db.add(doc)
+        db.commit()
+        db.refresh(doc)
+        doc_id = doc.id
+
+    with patch.object(storage_manager, "is_supabase_storage_enabled", return_value=True), \
+         patch.object(storage_manager, "download_from_supabase", side_effect=lambda k: cloud_bucket.get(k)):
+
+        dl_res = client.get(f"/documents/{doc_id}/download")
+        assert dl_res.status_code == 200
+        assert dl_res.content == test_content
+        # Confirm local cache is now populated
+        assert cached_path.is_file()
+
+    # Clean up
+    if cached_path.is_file():
+        cached_path.unlink()
+
+
+def test_regression_phase3_render_restart_simulation(client):
+    """
+    Test 3: Retrieve documents after simulating a Render redeployment or container restart.
+    Verifies that wiping all files in UPLOAD_DIR does not break document opening or downloading.
+    """
+    from backend.app.storage import storage_manager
+    from backend.app.config import UPLOAD_DIR
+
+    cloud_store = {}
+
+    def mock_upload(key, content, media_type=None):
+        cloud_store[key] = bytes(content)
+        return True
+
+    def mock_download(key):
+        return cloud_store.get(key)
+
+    token = _auth_user(client, "restart_user", "restart_user@example.com")
+    pdf_bytes = create_sample_pdf_bytes().getvalue()
+
+    with patch.object(storage_manager, "is_supabase_storage_enabled", return_value=True), \
+         patch.object(storage_manager, "upload_to_supabase", side_effect=mock_upload), \
+         patch.object(storage_manager, "download_from_supabase", side_effect=mock_download), \
+         patch("backend.app.ingestion.generate_embedding", side_effect=mock_generate_embedding), \
+         patch("backend.app.ingestion.generate_embeddings", side_effect=mock_generate_embeddings), \
+         patch("backend.app.ingestion.extract_text_and_metadata", return_value=[{"text": "Restart test", "page_number": 1}]):
+
+        up1 = client.post(
+            "/documents",
+            headers={"Authorization": f"Bearer {token}"},
+            data={"title": "Restart PDF Doc", "visibility": "public"},
+            files={"file": ("doc1.pdf", io.BytesIO(pdf_bytes), "application/pdf")},
+        )
+        assert up1.status_code == 201
+        doc1_id = up1.json()["id"]
+
+        # Simulate Render restart: wipe entire UPLOAD_DIR
+        for item in UPLOAD_DIR.glob("*"):
+            if item.is_file():
+                item.unlink()
+
+        # Both preview and download should seamlessly succeed after container restart
+        preview_res = client.get(f"/documents/{doc1_id}/download?inline=true")
+        assert preview_res.status_code == 200
+        assert preview_res.content == pdf_bytes
+
+        download_res = client.get(f"/documents/{doc1_id}/download")
+        assert download_res.status_code == 200
+        assert download_res.content == pdf_bytes
+
+
+def test_regression_phase3_cloud_upload_failure_no_silent_fallback(client):
+    """
+    Test 4: Cloud upload failure must not produce a successful upload response.
+    Verifies:
+    1. In production mode, missing cloud storage rejects uploads with HTTP 500
+       and does NOT silently fall back to ephemeral local disk.
+    2. Upload failure to Supabase returns HTTP 500 and creates no DB row or stray file.
+    """
+    from backend.app.storage import storage_manager
+    from backend.app.config import UPLOAD_DIR
+    from backend.app.models import Document
+
+    token = _auth_user(client, "fail_safe_user", "fail_safe_user@example.com")
+    pdf_bytes = create_sample_pdf_bytes().getvalue()
+
+    # 1. Production mode with disabled Supabase Storage -> 500 (refuse silent fallback)
+    with patch.object(storage_manager, "is_production_mode", return_value=True), \
+         patch.object(storage_manager, "is_supabase_storage_enabled", return_value=False):
+
+        res = client.post(
+            "/documents",
+            headers={"Authorization": f"Bearer {token}"},
+            data={"title": "Silent Fallback Attempt", "visibility": "public"},
+            files={"file": ("silent.pdf", io.BytesIO(pdf_bytes), "application/pdf")},
+        )
+        assert res.status_code == 500
+        assert "Persistent cloud storage is not configured" in res.json()["detail"]
+
+        with TestSessionLocal() as db:
+            assert db.query(Document).filter(Document.title == "Silent Fallback Attempt").first() is None
+
+    # 2. Cloud enabled, but upload_to_supabase returns False -> 500
+    with patch.object(storage_manager, "is_supabase_storage_enabled", return_value=True), \
+         patch.object(storage_manager, "upload_to_supabase", return_value=False):
+
+        fail_res = client.post(
+            "/documents",
+            headers={"Authorization": f"Bearer {token}"},
+            data={"title": "Upload Cloud Reject", "visibility": "public"},
+            files={"file": ("reject.pdf", io.BytesIO(pdf_bytes), "application/pdf")},
+        )
+        assert fail_res.status_code == 500
+        assert "Failed to persist document to cloud storage." in fail_res.json()["detail"]
+
+        with TestSessionLocal() as db:
+            assert db.query(Document).filter(Document.title == "Upload Cloud Reject").first() is None
+
+
+def test_regression_phase3_missing_cloud_objects_return_clear_404(client):
+    """
+    Test 5: Missing cloud objects return a clear HTTP 404 error with actionable detail.
+    """
+    from backend.app.storage import storage_manager
+    from backend.app.models import Document
+
+    token = _auth_user(client, "missing_obj_user", "missing_obj_user@example.com")
+    with TestSessionLocal() as db:
+        user = db.query(User).filter(User.username == "missing_obj_user").first()
+        doc = Document(
+            user_id=user.id,
+            title="Truly Missing Object",
+            file_path="non_existent_cloud_uuid.pdf",
+            file_type="pdf",
+            visibility="public",
+        )
+        db.add(doc)
+        db.commit()
+        db.refresh(doc)
+        doc_id = doc.id
+
+    with patch.object(storage_manager, "is_supabase_storage_enabled", return_value=True), \
+         patch.object(storage_manager, "download_from_supabase", return_value=None):
+
+        res = client.get(f"/documents/{doc_id}/download")
+        assert res.status_code == 404
+        assert "Document file was not found on the server storage" in res.json()["detail"]
+        assert "Please re-upload the document" in res.json()["detail"]
+
+
+def test_regression_phase3_preview_download_chat_authorization(client):
+    """
+    Test 6: Preview, download, and chat preserve strict authorization checks.
+    """
+    from backend.app.storage import storage_manager
+
+    token_owner = _auth_user(client, "auth_owner_user", "auth_owner_user@example.com")
+    token_stranger = _auth_user(client, "auth_stranger_user", "auth_stranger_user@example.com")
+    pdf_bytes = create_sample_pdf_bytes().getvalue()
+
+    cloud_bucket = {}
+
+    with patch.object(storage_manager, "is_supabase_storage_enabled", return_value=True), \
+         patch.object(storage_manager, "upload_to_supabase", side_effect=lambda k, c, m=None: cloud_bucket.update({k: bytes(c)}) or True), \
+         patch.object(storage_manager, "download_from_supabase", side_effect=lambda k: cloud_bucket.get(k)), \
+         patch("backend.app.ingestion.generate_embedding", side_effect=mock_generate_embedding), \
+         patch("backend.app.ingestion.generate_embeddings", side_effect=mock_generate_embeddings), \
+         patch("backend.app.ingestion.extract_text_and_metadata", return_value=[{"text": "Private research", "page_number": 1}]):
+
+        # Owner uploads private document
+        up = client.post(
+            "/documents",
+            headers={"Authorization": f"Bearer {token_owner}"},
+            data={"title": "Private Research Secrets", "visibility": "private"},
+            files={"file": ("secret.pdf", io.BytesIO(pdf_bytes), "application/pdf")},
+        )
+        assert up.status_code == 201
+        doc_id = up.json()["id"]
+
+    with patch.object(storage_manager, "is_supabase_storage_enabled", return_value=True), \
+         patch.object(storage_manager, "download_from_supabase", side_effect=lambda k: cloud_bucket.get(k)):
+
+        # 1. Unauthenticated user -> 401 on preview, download, chat
+        assert client.get(f"/documents/{doc_id}/download?inline=true").status_code == 401
+        assert client.get(f"/documents/{doc_id}/download").status_code == 401
+        assert client.post(f"/documents/{doc_id}/chat", json={"question": "What is inside?"}).status_code == 401
+
+        # 2. Unauthorized user (stranger) -> 403 on preview, download, chat
+        stranger_headers = {"Authorization": f"Bearer {token_stranger}"}
+        assert client.get(f"/documents/{doc_id}/download?inline=true", headers=stranger_headers).status_code == 403
+        assert client.get(f"/documents/{doc_id}/download", headers=stranger_headers).status_code == 403
+        assert client.post(f"/documents/{doc_id}/chat", headers=stranger_headers, json={"question": "What is inside?"}).status_code == 403
+
+        # 3. Authorized owner -> 200 on preview and download
+        owner_headers = {"Authorization": f"Bearer {token_owner}"}
+        assert client.get(f"/documents/{doc_id}/download?inline=true", headers=owner_headers).status_code == 200
+        assert client.get(f"/documents/{doc_id}/download", headers=owner_headers).status_code == 200
+
+
+def test_regression_phase3_legacy_document_backward_compatibility(client):
+    """
+    Test 7: Existing document records remain compatible with the storage fix.
+    Verifies that legacy records holding absolute filesystem paths:
+    1. Are resolved if present in Supabase Storage under their extracted filename key.
+    2. Are resolved if present on local disk.
+    3. Non-destructively report 404 with honest re-upload request if truly missing.
+    """
+    from backend.app.storage import storage_manager
+    from backend.app.models import Document
+    from backend.app.config import UPLOAD_DIR
+
+    legacy_key = "legacy_persisted_doc.pdf"
+    legacy_full_path = f"/opt/render/project/src/backend/uploads/{legacy_key}"
+    sample_content = b"%PDF-1.4 Sample legacy document content"
+
+    token = _auth_user(client, "legacy_user", "legacy_user@example.com")
+    with TestSessionLocal() as db:
+        user = db.query(User).filter(User.username == "legacy_user").first()
+        doc = Document(
+            user_id=user.id,
+            title="Legacy Document",
+            file_path=legacy_full_path,
+            file_type="pdf",
+            visibility="public",
+        )
+        db.add(doc)
+        db.commit()
+        db.refresh(doc)
+        doc_id = doc.id
+
+    # Case A: Legacy file exists in cloud storage under its clean key
+    with patch.object(storage_manager, "is_supabase_storage_enabled", return_value=True), \
+         patch.object(storage_manager, "download_from_supabase", side_effect=lambda k: sample_content if k == legacy_key else None):
+
+        res_cloud = client.get(f"/documents/{doc_id}/download")
+        assert res_cloud.status_code == 200
+        assert res_cloud.content == sample_content
+
+    # Clean local cache from previous download
+    cached = UPLOAD_DIR / legacy_key
+    if cached.is_file():
+        cached.unlink()
+
+    # Case B: Legacy file neither in cloud nor local disk -> clear 404
+    with patch.object(storage_manager, "is_supabase_storage_enabled", return_value=True), \
+         patch.object(storage_manager, "download_from_supabase", return_value=None):
+
+        res_missing = client.get(f"/documents/{doc_id}/download")
+        assert res_missing.status_code == 404
+        assert "Document file was not found on the server storage" in res_missing.json()["detail"]
+
+
+def test_regression_phase3_storage_timeout_and_permission_errors(client):
+    """
+    Test 8: Storage timeouts (504) and permission errors (502) return safe messages
+    and do NOT falsely report 'document not found'.
+    """
+    from backend.app.storage import storage_manager
+    from backend.app.models import Document
+
+    test_key = "cloud_status_test_doc.pdf"
+
+    token = _auth_user(client, "status_user", "status_user@example.com")
+    with TestSessionLocal() as db:
+        user = db.query(User).filter(User.username == "status_user").first()
+        doc = Document(
+            user_id=user.id,
+            title="Status Code Test Doc",
+            file_path=test_key,
+            file_type="pdf",
+            visibility="public",
+        )
+        db.add(doc)
+        db.commit()
+        db.refresh(doc)
+        doc_id = doc.id
+
+    # Timeout simulation
+    def mock_download_timeout(key):
+        storage_manager._last_status_code = 504
+        return None
+
+    with patch.object(storage_manager, "is_supabase_storage_enabled", return_value=True), \
+         patch.object(storage_manager, "download_from_supabase", side_effect=mock_download_timeout):
+
+        res_timeout = client.get(f"/documents/{doc_id}/download")
+        assert res_timeout.status_code == 504
+        assert "timed out" in res_timeout.json()["detail"].lower()
+
+    # Permission error simulation (403 from Supabase)
+    def mock_download_perm_error(key):
+        storage_manager._last_status_code = 403
+        return None
+
+    with patch.object(storage_manager, "is_supabase_storage_enabled", return_value=True), \
+         patch.object(storage_manager, "download_from_supabase", side_effect=mock_download_perm_error):
+
+        res_perm = client.get(f"/documents/{doc_id}/download")
+        assert res_perm.status_code == 502
+        assert "authorization failure" in res_perm.json()["detail"].lower()
+
+
+def test_regression_phase3_direct_byte_serving_on_cache_write_failure(client):
+    """
+    Test 9: Verifies that if writing the local disk cache fails (read-only filesystem),
+    the file is still directly streamed to the client with HTTP 200.
+    """
+    from backend.app.storage import storage_manager
+    from backend.app.models import Document
+    from backend.app.config import UPLOAD_DIR
+
+    test_key = "readonly_disk_doc.pdf"
+    content = b"%PDF-1.4 Streamed directly without local disk cache"
+
+    # Ensure no local file exists
+    p = UPLOAD_DIR / test_key
+    if p.is_file():
+        p.unlink()
+
+    token = _auth_user(client, "readonly_user", "readonly_user@example.com")
+    with TestSessionLocal() as db:
+        user = db.query(User).filter(User.username == "readonly_user").first()
+        doc = Document(
+            user_id=user.id,
+            title="Readonly Disk Doc",
+            file_path=test_key,
+            file_type="pdf",
+            visibility="public",
+        )
+        db.add(doc)
+        db.commit()
+        db.refresh(doc)
+        doc_id = doc.id
+
+    # Mock open inside resolve_local_file_path to fail writing local cache
+    orig_open = open
+    def mock_fail_open(file, mode="r", *args, **kwargs):
+        if "w" in mode and test_key in str(file):
+            raise OSError("Read-only file system")
+        return orig_open(file, mode, *args, **kwargs)
+
+    with patch.object(storage_manager, "is_supabase_storage_enabled", return_value=True), \
+         patch.object(storage_manager, "download_from_supabase", return_value=content), \
+         patch("builtins.open", side_effect=mock_fail_open):
+
+        res = client.get(f"/documents/{doc_id}/download")
+        assert res.status_code == 200
+        assert res.content == content
+
+
+
 
 
 
