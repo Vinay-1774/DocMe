@@ -2,10 +2,12 @@ import React, { useState, useEffect } from 'react';
 import { Link } from 'react-router-dom';
 import { TrendingUp, Award, Sparkles, MessageSquare, ExternalLink } from 'lucide-react';
 import { api } from '../services/api.js';
+import { useAuth } from '../hooks/useAuth.js';
 import { getInitials } from '../utils/format.js';
 import './SidebarRight.css';
 
 export default function SidebarRight() {
+  const { isAuthenticated } = useAuth();
   const [popularDocs, setPopularDocs] = useState([]);
   const [loadingPopular, setLoadingPopular] = useState(true);
   const [popularError, setPopularError] = useState(null);
@@ -18,6 +20,10 @@ export default function SidebarRight() {
     let isMounted = true;
 
     async function fetchPopular() {
+      if (!isAuthenticated) {
+        if (isMounted) setLoadingPopular(false);
+        return;
+      }
       try {
         setLoadingPopular(true);
         const data = await api.getPopularDocuments();
@@ -32,6 +38,10 @@ export default function SidebarRight() {
     }
 
     async function fetchRankings() {
+      if (!isAuthenticated) {
+        if (isMounted) setLoadingRankings(false);
+        return;
+      }
       try {
         setLoadingRankings(true);
         const data = await api.getUserRanking();

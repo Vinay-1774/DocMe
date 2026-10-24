@@ -144,6 +144,17 @@ button, input, select, textarea {
   color: inherit;
 }
 
+/* Unified chat textarea override: no nested borders or inner focus rings */
+textarea.chat-textarea,
+textarea.chat-textarea:focus,
+textarea.chat-textarea:focus-visible {
+  border: none !important;
+  outline: none !important;
+  box-shadow: none !important;
+  background: transparent !important;
+  border-radius: 0 !important;
+}
+
 /* Accessibility focus ring */
 :focus-visible {
   outline: 2px solid var(--primary);
@@ -481,31 +492,39 @@ button, input, select, textarea {
 }
 
 .btn-primary {
-  background-color: var(--primary);
-  color: var(--text-inverse);
-  box-shadow: 0 1px 2px 0 rgba(79, 70, 229, 0.3);
+  background-color: var(--primary-emerald, #10B981);
+  color: #0B0F14;
+  border: 1px solid var(--primary-emerald, #10B981);
+  box-shadow: 0 0 12px rgba(16, 185, 129, 0.25);
+  border-radius: var(--radius-md, 10px);
 }
 
 .btn-primary:hover {
-  background-color: var(--primary-hover);
-  box-shadow: 0 4px 12px 0 rgba(79, 70, 229, 0.35);
+  background-color: var(--primary-emerald-hover, #059669);
+  border-color: var(--primary-emerald-hover, #059669);
+  color: #0B0F14;
+  box-shadow: 0 0 18px rgba(16, 185, 129, 0.4);
+  transform: translateY(-1px);
   text-decoration: none;
 }
 
 .btn-primary:active {
-  background-color: var(--primary-active);
+  background-color: var(--primary-emerald-hover, #059669);
+  transform: translateY(0);
 }
 
 .btn-secondary {
-  background-color: var(--bg-subtle);
-  color: var(--text-secondary);
-  border-color: var(--border-default);
+  background-color: var(--bg-surface-secondary, #1C2430);
+  color: var(--text-primary, #F8FAFC);
+  border: 1px solid var(--border-medium, #2E3A4D);
+  border-radius: var(--radius-md, 10px);
 }
 
 .btn-secondary:hover {
-  background-color: var(--bg-active);
-  color: var(--text-primary);
-  border-color: var(--border-hover);
+  background-color: var(--bg-surface-hover, #263345);
+  color: var(--text-primary, #F8FAFC);
+  border-color: var(--border-medium, #2E3A4D);
+  transform: translateY(-1px);
   text-decoration: none;
 }
 

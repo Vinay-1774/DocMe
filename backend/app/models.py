@@ -71,10 +71,56 @@ class Document(Base):
     chunks: Mapped[list["DocumentChunk"]] = relationship(
         "DocumentChunk", back_populates="document", cascade="all, delete-orphan"
     )
+    topics: Mapped[list["Topic"]] = relationship(
+        "Topic",
+        secondary="document_topics",
+        back_populates="documents",
+        lazy="selectin",
+    )
 
     @property
     def uploader_name(self) -> Optional[str]:
         return self.user.username if self.user else None
+
+
+class Topic(Base):
+    """
+    Represents a research topic / category.
+    """
+    __tablename__ = "topics"
+
+    id: Mapped[int] = mapped_column(primary_key=True)
+    name: Mapped[str] = mapped_column(String(50), unique=True, nullable=False, index=True)
+    created_at: Mapped[datetime] = mapped_column(
+        DateTime(timezone=True),
+        server_default=func.now(),
+        nullable=False,
+    )
+
+    documents: Mapped[list["Document"]] = relationship(
+        "Document",
+        secondary="document_topics",
+        back_populates="topics",
+    )
+
+
+class DocumentTopic(Base):
+    """
+    Association table between documents and topics (Many-to-Many).
+    """
+    __tablename__ = "document_topics"
+    __table_args__ = (
+        Index("ix_document_topics_document_id", "document_id"),
+        Index("ix_document_topics_topic_id", "topic_id"),
+    )
+
+    document_id: Mapped[int] = mapped_column(
+        ForeignKey("documents.id", ondelete="CASCADE"), primary_key=True
+    )
+    topic_id: Mapped[int] = mapped_column(
+        ForeignKey("topics.id", ondelete="CASCADE"), primary_key=True
+    )
+
 
 
 class DocumentChunk(Base):

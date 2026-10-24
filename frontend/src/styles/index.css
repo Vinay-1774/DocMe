@@ -48,6 +48,141 @@ button {
   touch-action: manipulation;
 }
 
+/* ==========================================================================
+   DocMe Global Button System
+   Consistent heights, padding, border radius, typography, icon alignment,
+   hover, focus-visible, active, disabled, and loading states.
+   ========================================================================== */
+
+button,
+.btn,
+.btn-primary,
+.btn-secondary,
+.btn-outline,
+.pdf-btn-download,
+.btn-publish {
+  font-family: var(--font-sans);
+  -webkit-font-smoothing: antialiased;
+  -moz-osx-font-smoothing: grayscale;
+  box-sizing: border-box;
+  text-decoration: none;
+  touch-action: manipulation;
+  user-select: none;
+}
+
+/* Base button styling */
+.btn-primary,
+.btn-secondary,
+.btn-outline,
+.pdf-btn-download {
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  gap: 0.5rem;
+  height: 38px;
+  min-height: 38px;
+  padding: 0 1.125rem;
+  border-radius: var(--radius-md);
+  font-size: 0.875rem;
+  font-weight: 600;
+  line-height: 1;
+  white-space: nowrap;
+  cursor: pointer;
+  border: 1px solid transparent;
+  transition: all var(--transition-fast);
+  outline: none;
+}
+
+/* Primary Emerald Action (e.g. Publish Document, Open Document, Main Actions) */
+.btn-primary {
+  background-color: var(--primary-emerald);
+  color: #0B0F14;
+  border-color: var(--primary-emerald);
+  box-shadow: 0 0 12px rgba(16, 185, 129, 0.22);
+}
+
+.btn-primary:hover:not(:disabled) {
+  background-color: var(--primary-emerald-hover);
+  border-color: var(--primary-emerald-hover);
+  color: #0B0F14;
+  box-shadow: 0 0 18px rgba(16, 185, 129, 0.38);
+  transform: translateY(-1px);
+  text-decoration: none;
+}
+
+.btn-primary:active:not(:disabled) {
+  transform: translateY(0);
+  box-shadow: 0 0 8px rgba(16, 185, 129, 0.25);
+}
+
+.btn-primary:focus-visible {
+  outline: 2px solid var(--primary-emerald);
+  outline-offset: 2px;
+}
+
+.btn-primary:disabled {
+  opacity: 0.55;
+  cursor: not-allowed;
+  transform: none;
+  box-shadow: none;
+}
+
+/* Secondary Surface Action (e.g. Cancel, Secondary Download, Done, Dismiss) */
+.btn-secondary,
+.pdf-btn-download {
+  background-color: var(--bg-surface-secondary);
+  color: var(--text-primary);
+  border: 1px solid var(--border-medium);
+}
+
+.btn-secondary:hover:not(:disabled),
+.pdf-btn-download:hover:not(:disabled) {
+  background-color: var(--bg-surface-hover);
+  border-color: var(--border-medium);
+  color: var(--text-primary);
+  transform: translateY(-1px);
+  text-decoration: none;
+}
+
+.btn-secondary:active:not(:disabled),
+.pdf-btn-download:active:not(:disabled) {
+  transform: translateY(0);
+}
+
+.btn-secondary:focus-visible,
+.pdf-btn-download:focus-visible {
+  outline: 2px solid var(--primary-emerald);
+  outline-offset: 2px;
+  border-color: var(--primary-emerald);
+}
+
+.btn-secondary:disabled,
+.pdf-btn-download:disabled {
+  opacity: 0.55;
+  cursor: not-allowed;
+  transform: none;
+}
+
+/* Compact button variant */
+.btn-sm,
+.pdf-btn-download {
+  height: 34px;
+  min-height: 34px;
+  padding: 0 0.875rem;
+  font-size: 0.8125rem;
+  border-radius: var(--radius-md);
+}
+
+/* Large button variant */
+.btn-lg {
+  height: 44px;
+  min-height: 44px;
+  padding: 0 1.5rem;
+  font-size: 0.9375rem;
+  border-radius: var(--radius-md);
+}
+
+
 input, textarea, select {
   font-family: inherit;
   font-size: inherit;
@@ -62,6 +197,17 @@ input, textarea, select {
 input:focus, textarea:focus, select:focus {
   border-color: var(--primary-emerald);
   box-shadow: 0 0 0 2px var(--primary-emerald-subtle);
+}
+
+/* Clean unbordered textareas inside unified input containers (e.g. AI chat bar) */
+textarea.chat-textarea,
+textarea.chat-textarea:focus,
+textarea.chat-textarea:focus-visible {
+  border: none !important;
+  outline: none !important;
+  box-shadow: none !important;
+  background: transparent !important;
+  border-radius: 0 !important;
 }
 
 /* Custom modern dark scrollbar */

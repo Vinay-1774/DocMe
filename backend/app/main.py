@@ -1,9 +1,10 @@
+import json
 import logging
 import os
 import re
 import shutil
 from contextlib import asynccontextmanager
-from typing import List, Literal, Optional
+from typing import List, Literal, Optional, Union
 from urllib.parse import urlsplit
 from uuid import uuid4
 
@@ -11,7 +12,7 @@ from fastapi import Depends, FastAPI, File, Form, HTTPException, Query, Request,
 from fastapi.middleware.cors import CORSMiddleware
 from fastapi.responses import StreamingResponse
 from fastapi.security import OAuth2PasswordRequestForm
-from sqlalchemy import func, select
+from sqlalchemy import func, or_, select
 from sqlalchemy.orm import Session
 
 from starlette.datastructures import Headers
@@ -35,7 +36,7 @@ from .config import (
 
 # Database dependency and models
 from .database import get_db, init_db
-from .models import Comment, Document, DocumentChunk, User
+from .models import Comment, Document, DocumentChunk, DocumentTopic, Topic, User
 from .schema import (
     ChatRequest,
     ChatResponse,
@@ -46,12 +47,75 @@ from .schema import (
     DocumentUpdate,
     PopularDocumentResponse,
     TokenResponse,
+    TopicCountResponse,
     UserCreate,
     UserLogin,
     UserRankingResponse,
     UserResponse,
     MessageResponse,
 )
+
+
+def parse_and_validate_topics(topics_raw: Optional[Union[str, List[str]]], db: Session) -> list[Topic]:
+    """
+    Parses, validates, and persists/links up to 5 topics per document.
+    Enforces string length limits and deduplication.
+    """
+    if not topics_raw:
+        return []
+
+    topic_names: list[str] = []
+    if isinstance(topics_raw, str):
+        trimmed = topics_raw.strip()
+        if not trimmed:
+            return []
+        try:
+            parsed = json.loads(trimmed)
+            if isinstance(parsed, list):
+                topic_names = [str(t).strip() for t in parsed if str(t).strip()]
+            elif isinstance(parsed, str):
+                topic_names = [parsed.strip()]
+            else:
+                topic_names = [trimmed]
+        except Exception:
+            # Fall back to comma-separated splitting
+            topic_names = [t.strip() for t in trimmed.split(",") if t.strip()]
+    elif isinstance(topics_raw, list):
+        topic_names = [str(t).strip() for t in topics_raw if str(t).strip()]
+
+    # Limit to maximum 5 topics per document
+    if len(topic_names) > 5:
+        raise HTTPException(
+            status_code=status.HTTP_400_BAD_REQUEST,
+            detail="A document cannot have more than 5 topics.",
+        )
+
+    # Deduplicate topic names case-insensitively while preserving formatting
+    seen = set()
+    unique_names = []
+    for name in topic_names:
+        if len(name) > 50:
+            raise HTTPException(
+                status_code=status.HTTP_400_BAD_REQUEST,
+                detail=f"Topic '{name[:20]}...' exceeds maximum allowed length of 50 characters.",
+            )
+        lowered = name.lower()
+        if lowered not in seen:
+            seen.add(lowered)
+            unique_names.append(name)
+
+    resolved_topics: list[Topic] = []
+    for name in unique_names:
+        topic_record = db.scalar(select(Topic).where(func.lower(Topic.name) == name.lower()))
+        if not topic_record:
+            formatted_name = name.title() if name.islower() else name
+            topic_record = Topic(name=formatted_name)
+            db.add(topic_record)
+            db.flush()
+        resolved_topics.append(topic_record)
+
+    return resolved_topics
+
 from .auth import (
     create_access_token,
     create_refresh_token,
@@ -342,67 +406,163 @@ def get_me(current_user: User = Depends(get_current_user)):
 
 
 
+@app.get("/topics", response_model=List[TopicCountResponse])
+@app.get("/documents/topics", response_model=List[TopicCountResponse])
+def get_topics(
+    all: bool = Query(False, description="Return all registered topics regardless of count"),
+    current_user: Optional[User] = Depends(get_optional_current_user),
+    db: Session = Depends(get_db),
+):
+    """
+    Returns real topics from the database with accurate document counts.
+    If all=True, returns all catalogued topics (for publish autocomplete).
+    If all=False (default), returns topics represented by accessible documents in the feed,
+    plus 'Uncategorized' if there are accessible documents without assigned topics.
+    """
+    if current_user is None:
+        access_filter = (Document.visibility == "public")
+    else:
+        access_filter = or_(Document.visibility == "public", Document.user_id == current_user.id)
+
+    if all:
+        stmt = (
+            select(Topic.id, Topic.name, func.count(Document.id).label("doc_count"))
+            .outerjoin(DocumentTopic, Topic.id == DocumentTopic.topic_id)
+            .outerjoin(
+                Document,
+                (DocumentTopic.document_id == Document.id) & access_filter,
+            )
+            .group_by(Topic.id, Topic.name)
+            .order_by(Topic.name.asc())
+        )
+        rows = db.execute(stmt).all()
+        return [
+            TopicCountResponse(id=r.id, name=r.name, count=r.doc_count)
+            for r in rows
+        ]
+
+    # Topics represented by accessible documents in the feed (count > 0)
+    stmt = (
+        select(Topic.id, Topic.name, func.count(Document.id).label("doc_count"))
+        .join(DocumentTopic, Topic.id == DocumentTopic.topic_id)
+        .join(Document, DocumentTopic.document_id == Document.id)
+        .where(access_filter)
+        .group_by(Topic.id, Topic.name)
+        .order_by(func.count(Document.id).desc(), Topic.name.asc())
+    )
+    rows = db.execute(stmt).all()
+    results = [
+        TopicCountResponse(id=r.id, name=r.name, count=r.doc_count)
+        for r in rows
+    ]
+
+    # Calculate accessible documents with no topics (Uncategorized)
+    uncat_stmt = (
+        select(func.count(Document.id))
+        .outerjoin(DocumentTopic, Document.id == DocumentTopic.document_id)
+        .where(access_filter)
+        .where(DocumentTopic.topic_id.is_(None))
+    )
+    uncat_count = db.scalar(uncat_stmt) or 0
+    if uncat_count > 0:
+        results.append(TopicCountResponse(id=None, name="Uncategorized", count=uncat_count))
+
+    return results
+
+
 @app.get("/feed", response_model=List[DocumentResponse])
 @app.get("/documents/feed", response_model=List[DocumentResponse])
-def public_feed(db: Session = Depends(get_db)):
-    """Public document feed displaying public research documents."""
+def public_feed(
+    topic: Optional[str] = Query(None, description="Optional topic filter"),
+    db: Session = Depends(get_db),
+):
+    """Public document feed displaying public research documents, optionally filtered by topic."""
     stmt = (
         select(Document)
         .where(Document.visibility == "public")
-        .order_by(Document.created_at.desc())
     )
+    if topic:
+        topic_clean = topic.strip()
+        if topic_clean.lower() == "uncategorized":
+            stmt = stmt.outerjoin(DocumentTopic, Document.id == DocumentTopic.document_id).where(
+                DocumentTopic.topic_id.is_(None)
+            )
+        elif topic_clean.lower() not in ("all topics", "all", ""):
+            stmt = (
+                stmt.join(DocumentTopic, Document.id == DocumentTopic.document_id)
+                .join(Topic, DocumentTopic.topic_id == Topic.id)
+                .where(func.lower(Topic.name) == topic_clean.lower())
+            )
+    stmt = stmt.order_by(Document.created_at.desc())
     return db.scalars(stmt).all()
 
 
 @app.get("/documents/search", response_model=List[DocumentResponse])
 def search_documents(
     q: str = Query(..., min_length=1, description="Search query string"),
+    topic: Optional[str] = Query(None, description="Optional topic filter"),
     limit: int = Query(10, ge=1, le=50),
     current_user: Optional[User] = Depends(get_optional_current_user),
     db: Session = Depends(get_db),
 ):
     """
-    Searches for related documents by title/description and semantic vector similarity.
+    Searches for related documents by title/description and semantic vector similarity, optionally filtered by topic.
     """
     user_id = current_user.id if current_user is not None else None
     return perform_semantic_search(
         query=q,
         db=db,
         user_id=user_id,
+        topic=topic,
         limit=limit,
     )
 
 
 @app.get("/documents/popular", response_model=List[PopularDocumentResponse])
-def popular_documents(db: Session = Depends(get_db)):
-    """Lists public documents sorted by engagement (number of comments)."""
+def popular_documents(
+    topic: Optional[str] = Query(None, description="Optional topic filter"),
+    db: Session = Depends(get_db),
+):
+    """Lists public documents sorted by engagement (number of comments), optionally filtered by topic."""
     stmt = (
         select(
-            Document.id,
-            Document.user_id,
-            Document.title,
-            Document.visibility,
-            Document.created_at,
+            Document,
             func.count(Comment.id).label("comment_count"),
         )
         .outerjoin(Comment, Document.id == Comment.document_id)
         .where(Document.visibility == "public")
-        .group_by(Document.id)
+    )
+    if topic:
+        topic_clean = topic.strip()
+        if topic_clean.lower() == "uncategorized":
+            stmt = stmt.outerjoin(DocumentTopic, Document.id == DocumentTopic.document_id).where(
+                DocumentTopic.topic_id.is_(None)
+            )
+        elif topic_clean.lower() not in ("all topics", "all", ""):
+            stmt = (
+                stmt.join(DocumentTopic, Document.id == DocumentTopic.document_id)
+                .join(Topic, DocumentTopic.topic_id == Topic.id)
+                .where(func.lower(Topic.name) == topic_clean.lower())
+            )
+    stmt = (
+        stmt.group_by(Document.id)
         .order_by(func.count(Comment.id).desc(), Document.created_at.desc())
     )
     results = db.execute(stmt).all()
 
     return [
         PopularDocumentResponse(
-            id=row.id,
-            user_id=row.user_id,
-            title=row.title,
-            visibility=row.visibility,
-            comment_count=row.comment_count,
-            created_at=row.created_at,
+            id=doc.id,
+            user_id=doc.user_id,
+            title=doc.title,
+            visibility=doc.visibility,
+            comment_count=cnt,
+            created_at=doc.created_at,
+            topics=[t.name for t in doc.topics],
         )
-        for row in results
+        for doc, cnt in results
     ]
+
 
 
 @app.get("/users/ranking", response_model=List[UserRankingResponse])
@@ -474,6 +634,7 @@ def upload_document(
     title: str = Form(...),
     description: Optional[str] = Form(None),
     visibility: Literal["public", "private"] = Form("public"),
+    topics: Optional[str] = Form(None),
     file: UploadFile = File(...),
     current_user: User = Depends(get_current_user),
     db: Session = Depends(get_db),
@@ -585,6 +746,9 @@ def upload_document(
     else:
         stored_reference = str(saved_file_path)
 
+    # Parse and validate optional document topics
+    resolved_topics = parse_and_validate_topics(topics, db)
+
     # 3. Stage Document record and ingest chunks atomically
     new_doc = Document(
         user_id=current_user.id,
@@ -593,7 +757,9 @@ def upload_document(
         file_path=stored_reference,
         file_type=ext.lstrip("."),
         visibility=visibility,
+        topics=resolved_topics,
     )
+
 
     try:
         db.add(new_doc)
@@ -658,12 +824,13 @@ def upload_document(
 @app.get("/documents", response_model=List[DocumentResponse])
 def list_documents(
     filter_by: Optional[Literal["mine", "public"]] = None,
+    topic: Optional[str] = Query(None, description="Optional topic filter"),
     current_user: User = Depends(get_current_user),
     db: Session = Depends(get_db),
 ):
     """
     Lists documents accessible to the authenticated user:
-    all public documents and the user's own private documents.
+    all public documents and the user's own private documents, optionally filtered by topic.
     """
     if filter_by == "mine":
         stmt = select(Document).where(Document.user_id == current_user.id)
@@ -673,6 +840,19 @@ def list_documents(
         stmt = select(Document).where(
             (Document.visibility == "public") | (Document.user_id == current_user.id)
         )
+
+    if topic:
+        topic_clean = topic.strip()
+        if topic_clean.lower() == "uncategorized":
+            stmt = stmt.outerjoin(DocumentTopic, Document.id == DocumentTopic.document_id).where(
+                DocumentTopic.topic_id.is_(None)
+            )
+        elif topic_clean.lower() not in ("all topics", "all", ""):
+            stmt = (
+                stmt.join(DocumentTopic, Document.id == DocumentTopic.document_id)
+                .join(Topic, DocumentTopic.topic_id == Topic.id)
+                .where(func.lower(Topic.name) == topic_clean.lower())
+            )
 
     stmt = stmt.order_by(Document.created_at.desc())
     return db.scalars(stmt).all()
@@ -711,7 +891,7 @@ def update_document(
     current_user: User = Depends(get_current_user),
     db: Session = Depends(get_db),
 ):
-    """Allows only the document owner to update metadata and visibility."""
+    """Allows only the document owner to update metadata, visibility, and topics."""
     doc = db.scalar(select(Document).where(Document.id == document_id))
     if not doc:
         raise HTTPException(status_code=status.HTTP_404_NOT_FOUND, detail="Document not found.")
@@ -728,10 +908,13 @@ def update_document(
         doc.description = update_data.description.strip()
     if update_data.visibility is not None:
         doc.visibility = update_data.visibility
+    if update_data.topics is not None:
+        doc.topics = parse_and_validate_topics(update_data.topics, db)
 
     db.commit()
     db.refresh(doc)
     return doc
+
 
 
 @app.delete("/documents/{document_id}", response_model=MessageResponse, status_code=status.HTTP_200_OK)

@@ -9,7 +9,7 @@
     "build:vite": "vite build",
     "build:prod": "node scripts/build.js --prod && vite build",
     "build:clean": "node scripts/build.js --clean",
-    "test:frontend": "node tests/test_frontend_auth.mjs && node tests/test_backend_url_config.mjs && node tests/test_document_deletion_frontend.mjs && node tests/test_typing_indicator.mjs && node tests/test_profile_upload.mjs && node tests/test_frontend_otp.mjs && node tests/test_responsiveness.mjs && node tests/test_explore_page.mjs && node tests/test_publish_workflow.mjs && node tests/test_document_discussion.mjs && node tests/test_auth_lifecycle.mjs && node tests/test_e2e_release_readiness.mjs"
+    "test:frontend": "node tests/test_frontend_auth.mjs && node tests/test_backend_url_config.mjs && node tests/test_document_deletion_frontend.mjs && node tests/test_typing_indicator.mjs && node tests/test_profile_upload.mjs && node tests/test_frontend_otp.mjs && node tests/test_responsiveness.mjs && node tests/test_explore_page.mjs && node tests/test_publish_workflow.mjs && node tests/test_document_discussion.mjs && node tests/test_auth_lifecycle.mjs && node tests/test_e2e_release_readiness.mjs && node tests/test_chat_input_overflow.mjs && node tests/test_docx_preview_and_buttons.mjs && node tests/test_document_topics_frontend.mjs && node tests/test_auth_access_guard.mjs"
   },
   "devDependencies": {
     "@vitejs/plugin-react": "^4.7.0",

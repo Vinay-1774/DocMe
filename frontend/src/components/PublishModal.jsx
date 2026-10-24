@@ -29,6 +29,10 @@ export default function PublishModal({ isOpen, onClose, onSuccess }) {
   const [description, setDescription] = useState('');
   const [visibility, setVisibility] = useState('public');
   const [file, setFile] = useState(null);
+  const [selectedTopics, setSelectedTopics] = useState([]);
+  const [topicInput, setTopicInput] = useState('');
+  const [availableTopics, setAvailableTopics] = useState([]);
+  const [isDropdownOpen, setIsDropdownOpen] = useState(false);
 
   // UI & Validation States
   const [isDragging, setIsDragging] = useState(false);
@@ -38,6 +42,53 @@ export default function PublishModal({ isOpen, onClose, onSuccess }) {
   const [successDoc, setSuccessDoc] = useState(null);
 
   const fileInputRef = useRef(null);
+  const dropdownRef = useRef(null);
+
+  // Load canonical topics for dropdown suggestions when modal opens
+  useEffect(() => {
+    if (isOpen) {
+      api.getTopics(true).then((data) => {
+        if (Array.isArray(data)) {
+          setAvailableTopics(data.filter((t) => t.name.toLowerCase() !== 'uncategorized'));
+        }
+      }).catch((err) => {
+        console.error('Failed to load topic suggestions:', err);
+      });
+    }
+  }, [isOpen]);
+
+  // Click outside listener for dropdown
+  useEffect(() => {
+    const handleClickOutside = (e) => {
+      if (dropdownRef.current && !dropdownRef.current.contains(e.target)) {
+        setIsDropdownOpen(false);
+      }
+    };
+    document.addEventListener('mousedown', handleClickOutside);
+    return () => document.removeEventListener('mousedown', handleClickOutside);
+  }, []);
+
+  // Topic handlers
+  const handleAddTopic = (topicName) => {
+    const trimmed = topicName.trim();
+    if (!trimmed) return;
+    if (selectedTopics.length >= 5) {
+      setFieldErrors((prev) => ({ ...prev, topics: 'Maximum 5 topics allowed.' }));
+      return;
+    }
+    const exists = selectedTopics.some((t) => t.toLowerCase() === trimmed.toLowerCase());
+    if (!exists) {
+      setSelectedTopics((prev) => [...prev, trimmed]);
+      setFieldErrors((prev) => ({ ...prev, topics: null }));
+    }
+    setTopicInput('');
+    setIsDropdownOpen(false);
+  };
+
+  const handleRemoveTopic = (topicToRemove) => {
+    setSelectedTopics((prev) => prev.filter((t) => t !== topicToRemove));
+    setFieldErrors((prev) => ({ ...prev, topics: null }));
+  };
 
   // Reset form when modal opens or closes
   const resetForm = useCallback(() => {
@@ -45,6 +96,9 @@ export default function PublishModal({ isOpen, onClose, onSuccess }) {
     setDescription('');
     setVisibility('public');
     setFile(null);
+    setSelectedTopics([]);
+    setTopicInput('');
+    setIsDropdownOpen(false);
     setError(null);
     setFieldErrors({});
     setIsDragging(false);
@@ -195,6 +249,9 @@ export default function PublishModal({ isOpen, onClose, onSuccess }) {
       }
       formData.append('visibility', visibility);
       formData.append('file', file);
+      if (selectedTopics.length > 0) {
+        formData.append('topics', JSON.stringify(selectedTopics));
+      }
 
       // Call centralized API client
       const createdDoc = await api.uploadDocument(formData);
@@ -314,6 +371,15 @@ export default function PublishModal({ isOpen, onClose, onSuccess }) {
                 <p style={{ fontSize: '0.8125rem', color: 'var(--text-secondary)', margin: 0 }}>
                   {successDoc.description}
                 </p>
+              )}
+              {Array.isArray(successDoc.topics) && successDoc.topics.length > 0 && (
+                <div className="card-tags" style={{ marginTop: '0.25rem' }}>
+                  {successDoc.topics.map((t) => (
+                    <span key={t} className="card-tag">
+                      {t}
+                    </span>
+                  ))}
+                </div>
               )}
               <div className="success-ai-status">
                 <Sparkles size={13} />
@@ -513,6 +579,124 @@ export default function PublishModal({ isOpen, onClose, onSuccess }) {
               />
               <span className="form-hint">
                 A concise abstract helps researchers discover your paper in Explore and feed search.
+              </span>
+            </div>
+
+            {/* Topic Selection Field */}
+            <div className="form-group topic-select-group" ref={dropdownRef}>
+              <div className="form-label-row">
+                <label htmlFor="topic-input-field" className="form-label">
+                  Topics / Categories <span style={{ color: 'var(--text-muted)' }}>(Optional)</span>
+                </label>
+                <span className="form-char-count">{selectedTopics.length}/5 topics</span>
+              </div>
+
+              {/* Selected topic tags */}
+              {selectedTopics.length > 0 && (
+                <div className="selected-topics-list">
+                  {selectedTopics.map((t) => (
+                    <span key={t} className="selected-topic-pill">
+                      <span>{t}</span>
+                      <button
+                        type="button"
+                        className="btn-remove-topic"
+                        onClick={() => handleRemoveTopic(t)}
+                        disabled={loading}
+                        aria-label={`Remove topic ${t}`}
+                      >
+                        <X size={12} />
+                      </button>
+                    </span>
+                  ))}
+                </div>
+              )}
+
+              {/* Input for searching or typing a new topic */}
+              <div className="topic-input-container">
+                <input
+                  id="topic-input-field"
+                  type="text"
+                  className="form-input"
+                  placeholder={
+                    selectedTopics.length >= 5
+                      ? 'Topic limit reached (5 max)'
+                      : 'Search topics or type a new one (e.g. Artificial Intelligence, Medicine)...'
+                  }
+                  value={topicInput}
+                  onChange={(e) => {
+                    setTopicInput(e.target.value);
+                    setIsDropdownOpen(true);
+                  }}
+                  onFocus={() => setIsDropdownOpen(true)}
+                  onKeyDown={(e) => {
+                    if (e.key === 'Enter') {
+                      e.preventDefault();
+                      handleAddTopic(topicInput);
+                    }
+                  }}
+                  disabled={loading || selectedTopics.length >= 5}
+                />
+                {topicInput.trim() && (
+                  <button
+                    type="button"
+                    className="btn-add-topic-inline"
+                    onClick={() => handleAddTopic(topicInput)}
+                    disabled={loading || selectedTopics.length >= 5}
+                  >
+                    Add
+                  </button>
+                )}
+              </div>
+
+              {/* Dropdown Suggestions */}
+              {isDropdownOpen && selectedTopics.length < 5 && (
+                <div className="topics-dropdown-menu">
+                  {availableTopics
+                    .filter((t) => {
+                      const matchesQuery = t.name.toLowerCase().includes(topicInput.toLowerCase().trim());
+                      const notAlreadySelected = !selectedTopics.some(
+                        (sel) => sel.toLowerCase() === t.name.toLowerCase()
+                      );
+                      return matchesQuery && notAlreadySelected;
+                    })
+                    .slice(0, 8)
+                    .map((t) => (
+                      <button
+                        key={t.name}
+                        type="button"
+                        className="topic-dropdown-item"
+                        onClick={() => handleAddTopic(t.name)}
+                      >
+                        <span className="topic-dropdown-name">{t.name}</span>
+                        {t.count !== undefined && t.count > 0 && (
+                          <span className="topic-dropdown-count">{t.count} papers</span>
+                        )}
+                      </button>
+                    ))}
+                  {topicInput.trim() &&
+                    !availableTopics.some(
+                      (t) => t.name.toLowerCase() === topicInput.trim().toLowerCase()
+                    ) &&
+                    !selectedTopics.some(
+                      (t) => t.toLowerCase() === topicInput.trim().toLowerCase()
+                    ) && (
+                      <button
+                        type="button"
+                        className="topic-dropdown-item create-new"
+                        onClick={() => handleAddTopic(topicInput)}
+                      >
+                        <span>Add &ldquo;{topicInput.trim()}&rdquo; as new topic</span>
+                      </button>
+                    )}
+                </div>
+              )}
+
+              {fieldErrors.topics && (
+                <span className="form-field-error">{fieldErrors.topics}</span>
+              )}
+
+              <span className="form-hint">
+                Add up to 5 topics to index your paper and help peers filter it in the feed.
               </span>
             </div>
 

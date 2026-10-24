@@ -30,8 +30,11 @@
 .workspace-back-btn {
   display: inline-flex;
   align-items: center;
-  gap: 0.35rem;
-  padding: 0.4rem 0.75rem;
+  justify-content: center;
+  gap: 0.4rem;
+  height: 34px;
+  min-height: 34px;
+  padding: 0 0.875rem;
   border-radius: var(--radius-md);
   color: var(--text-secondary);
   font-size: 0.8125rem;
@@ -41,13 +44,21 @@
   text-decoration: none;
   transition: all var(--transition-fast);
   flex-shrink: 0;
+  box-sizing: border-box;
 }
 
 .workspace-back-btn:hover {
   color: var(--text-primary);
   background-color: var(--bg-surface-secondary);
   border-color: var(--border-medium);
+  transform: translateY(-1px);
 }
+
+.workspace-back-btn:focus-visible {
+  outline: 2px solid var(--primary-emerald);
+  outline-offset: 2px;
+}
+
 
 .workspace-doc-meta {
   display: flex;

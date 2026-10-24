@@ -1,7 +1,7 @@
 from datetime import datetime
 from typing import List, Literal, Optional
 
-from pydantic import BaseModel, ConfigDict, EmailStr
+from pydantic import BaseModel, ConfigDict, EmailStr, field_validator
 
 
 # --- User Schemas ---
@@ -33,9 +33,18 @@ class TokenResponse(BaseModel):
 
 
 
+# --- Topic Schemas ---
+
+class TopicCountResponse(BaseModel):
+    id: Optional[int] = None
+    name: str
+    count: int
+
+    model_config = ConfigDict(from_attributes=True)
+
+
+
 # --- Document Schemas ---
-
-
 
 class DocumentResponse(BaseModel):
     id: int
@@ -46,14 +55,31 @@ class DocumentResponse(BaseModel):
     visibility: Literal["public", "private"]
     created_at: datetime
     uploader_name: Optional[str] = None
+    topics: List[str] = []
 
     model_config = ConfigDict(from_attributes=True)
+
+    @field_validator("topics", mode="before")
+    @classmethod
+    def serialize_topics(cls, v):
+        if not v:
+            return []
+        result = []
+        for item in v:
+            if isinstance(item, str):
+                result.append(item)
+            elif hasattr(item, "name"):
+                result.append(item.name)
+            elif isinstance(item, dict) and "name" in item:
+                result.append(item["name"])
+        return result
 
 
 class DocumentUpdate(BaseModel):
     title: Optional[str] = None
     description: Optional[str] = None
     visibility: Optional[Literal["public", "private"]] = None
+    topics: Optional[List[str]] = None
 
 
 # --- Comment Schemas ---
@@ -101,8 +127,25 @@ class PopularDocumentResponse(BaseModel):
     visibility: str
     comment_count: int
     created_at: datetime
+    topics: List[str] = []
 
     model_config = ConfigDict(from_attributes=True)
+
+    @field_validator("topics", mode="before")
+    @classmethod
+    def serialize_topics(cls, v):
+        if not v:
+            return []
+        result = []
+        for item in v:
+            if isinstance(item, str):
+                result.append(item)
+            elif hasattr(item, "name"):
+                result.append(item.name)
+            elif isinstance(item, dict) and "name" in item:
+                result.append(item["name"])
+        return result
+
 
 
 class UserRankingResponse(BaseModel):

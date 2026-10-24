@@ -23,6 +23,7 @@ import {
 } from 'lucide-react';
 import AppLayout from '../layouts/AppLayout.jsx';
 import DocumentCard from '../components/DocumentCard.jsx';
+import ProtectedRoute from '../components/ProtectedRoute.jsx';
 import { api } from '../services/api.js';
 import { getInitials, formatRelativeTime } from '../utils/format.js';
 import './ExplorePage.css';
@@ -39,8 +40,17 @@ const TOPIC_SHORTCUTS = [
 ];
 
 export default function ExplorePage() {
+  return (
+    <ProtectedRoute>
+      <ExplorePageContent />
+    </ProtectedRoute>
+  );
+}
+
+function ExplorePageContent() {
   const [searchParams, setSearchParams] = useSearchParams();
   const queryParam = searchParams.get('q') || '';
+  const topicParam = searchParams.get('topic') || '';
 
   // Search input state
   const [searchInput, setSearchInput] = useState(queryParam);
@@ -70,12 +80,12 @@ export default function ExplorePage() {
   }, [queryParam]);
 
   // Load discovery data (Popular, Contributors, Latest) when not searching
-  const loadDiscoveryData = useCallback(async () => {
+  const loadDiscoveryData = useCallback(async (selectedTopic = topicParam) => {
     // 1. Fetch Popular Public Documents
     setLoadingPopular(true);
     setPopularError(null);
     try {
-      const data = await api.getPopularDocuments();
+      const data = await api.getPopularDocuments(selectedTopic || null);
       setPopularDocs(Array.isArray(data) ? data.slice(0, 6) : []);
     } catch (err) {
       setPopularError(err.message || 'Unable to load popular documents');
@@ -99,17 +109,17 @@ export default function ExplorePage() {
     setLoadingLatest(true);
     setLatestError(null);
     try {
-      const data = await api.getFeed();
+      const data = await api.getFeed(selectedTopic || null);
       setLatestDocs(Array.isArray(data) ? data.slice(0, 8) : []);
     } catch (err) {
       setLatestError(err.message || 'Unable to load latest research');
     } finally {
       setLoadingLatest(false);
     }
-  }, []);
+  }, [topicParam]);
 
   // Execute search when queryParam is present
-  const executeSearch = useCallback(async (query) => {
+  const executeSearch = useCallback(async (query, selectedTopic = topicParam) => {
     const trimmed = query.trim();
     if (!trimmed) {
       setSearchResults([]);
@@ -120,7 +130,7 @@ export default function ExplorePage() {
     setIsSearching(true);
     setSearchError(null);
     try {
-      const data = await api.searchDocuments(trimmed, 30);
+      const data = await api.searchDocuments(trimmed, 30, selectedTopic || null);
       setSearchResults(Array.isArray(data) ? data : []);
     } catch (err) {
       setSearchError(err.message || 'Search failed. Please try again.');
@@ -128,16 +138,16 @@ export default function ExplorePage() {
     } finally {
       setIsSearching(false);
     }
-  }, []);
+  }, [topicParam]);
 
   // Effect triggering search or discovery fetch based on URL query
   useEffect(() => {
     if (queryParam.trim()) {
-      executeSearch(queryParam);
+      executeSearch(queryParam, topicParam);
     } else {
-      loadDiscoveryData();
+      loadDiscoveryData(topicParam);
     }
-  }, [queryParam, executeSearch, loadDiscoveryData]);
+  }, [queryParam, topicParam, executeSearch, loadDiscoveryData]);
 
   // Handle search form submit
   const handleSearchSubmit = (e) => {
@@ -195,13 +205,15 @@ export default function ExplorePage() {
         if (trimmed) setSearchParams({ q: trimmed });
         else setSearchParams({});
       }}
-      activeTopic={queryParam || 'Explore'}
+      activeTopic={topicParam || (queryParam ? 'Explore' : 'All Topics')}
       onSelectTopic={(topic) => {
+        const nextParams = new URLSearchParams(searchParams);
         if (topic === 'All Topics') {
-          handleClearSearch();
+          nextParams.delete('topic');
         } else {
-          handleTopicClick(topic);
+          nextParams.set('topic', topic);
         }
+        setSearchParams(nextParams);
       }}
     >
       <div className="explore-page-container">
@@ -241,6 +253,27 @@ export default function ExplorePage() {
               </button>
             </div>
           </form>
+
+          {/* Active Topic Filter Badge if filtered from sidebar */}
+          {topicParam && (
+            <div style={{ display: 'flex', alignItems: 'center', gap: '0.5rem', marginTop: '0.75rem' }}>
+              <div className="active-filter-badge">
+                <span>Topic: {topicParam}</span>
+                <button
+                  type="button"
+                  className="btn-clear-filter"
+                  onClick={() => {
+                    const next = new URLSearchParams(searchParams);
+                    next.delete('topic');
+                    setSearchParams(next);
+                  }}
+                  aria-label="Clear topic filter"
+                >
+                  <X size={12} />
+                </button>
+              </div>
+            </div>
+          )}
 
           {/* Research Topic Shortcuts */}
           <div className="explore-topics-section" aria-label="Research Topics">

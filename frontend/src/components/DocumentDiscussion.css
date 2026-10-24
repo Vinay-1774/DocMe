@@ -124,6 +124,9 @@
 
 .discussion-textarea {
   width: 100%;
+  max-width: 100%;
+  box-sizing: border-box;
+  min-width: 0;
   padding: 0.75rem 0.875rem;
   background-color: var(--bg-surface);
   border: 1px solid var(--border-subtle);
@@ -134,6 +137,8 @@
   resize: vertical;
   min-height: 80px;
   line-height: 1.45;
+  word-break: break-word;
+  overflow-wrap: break-word;
   transition: all var(--transition-fast);
 }
 

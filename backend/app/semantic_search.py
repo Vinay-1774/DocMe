@@ -9,7 +9,7 @@ from sqlalchemy.orm import Session
 logger = logging.getLogger(__name__)
 
 # Import database models
-from .models import Document, DocumentChunk
+from .models import Document, DocumentChunk, DocumentTopic, Topic
 
 # Reuse existing shared embedding generation from ingestion.py
 from .ingestion import generate_embedding
@@ -19,6 +19,7 @@ def perform_semantic_search(
     query: str,
     db: Session,
     user_id: Optional[int] = None,
+    topic: Optional[str] = None,
     limit: int = 10,
     distance_threshold: float = 0.65,
 ) -> List[Document]:
@@ -59,9 +60,21 @@ def perform_semantic_search(
                 Document.description.ilike(f"%{clean_query}%"),
             )
         )
-        .order_by(Document.created_at.desc())
-        .limit(limit)
     )
+    if topic:
+        topic_clean = topic.strip()
+        if topic_clean.lower() == "uncategorized":
+            keyword_stmt = keyword_stmt.outerjoin(DocumentTopic, Document.id == DocumentTopic.document_id).where(
+                DocumentTopic.topic_id.is_(None)
+            )
+        elif topic_clean.lower() not in ("all topics", "all", ""):
+            keyword_stmt = (
+                keyword_stmt.join(DocumentTopic, Document.id == DocumentTopic.document_id)
+                .join(Topic, DocumentTopic.topic_id == Topic.id)
+                .where(func.lower(Topic.name) == topic_clean.lower())
+            )
+
+    keyword_stmt = keyword_stmt.order_by(Document.created_at.desc()).limit(limit)
     keyword_docs = list(db.scalars(keyword_stmt).all())
     seen_doc_ids = {doc.id for doc in keyword_docs}
     combined_results = list(keyword_docs)
@@ -83,6 +96,18 @@ def perform_semantic_search(
                     .where(DocumentChunk.embedding.is_not(None))
                     .where(dist_expr < distance_threshold)
                 )
+                if topic:
+                    topic_clean = topic.strip()
+                    if topic_clean.lower() == "uncategorized":
+                        semantic_stmt = semantic_stmt.outerjoin(DocumentTopic, Document.id == DocumentTopic.document_id).where(
+                            DocumentTopic.topic_id.is_(None)
+                        )
+                    elif topic_clean.lower() not in ("all topics", "all", ""):
+                        semantic_stmt = (
+                            semantic_stmt.join(DocumentTopic, Document.id == DocumentTopic.document_id)
+                            .join(Topic, DocumentTopic.topic_id == Topic.id)
+                            .where(func.lower(Topic.name) == topic_clean.lower())
+                        )
                 if seen_doc_ids:
                     semantic_stmt = semantic_stmt.where(
                         DocumentChunk.document_id.not_in(seen_doc_ids)

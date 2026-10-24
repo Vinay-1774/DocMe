@@ -12,12 +12,21 @@ import {
 import PdfViewer from '../components/PdfViewer.jsx';
 import DocumentChat from '../components/DocumentChat.jsx';
 import DocumentDiscussion from '../components/DocumentDiscussion.jsx';
+import ProtectedRoute from '../components/ProtectedRoute.jsx';
 import { api } from '../services/api.js';
 import { useAuth } from '../hooks/useAuth.js';
 import { formatRelativeTime } from '../utils/format.js';
 import './DocumentPage.css';
 
 export default function DocumentPage() {
+  return (
+    <ProtectedRoute>
+      <DocumentPageContent />
+    </ProtectedRoute>
+  );
+}
+
+function DocumentPageContent() {
   const { id } = useParams();
   const [searchParams] = useSearchParams();
   const { isAuthenticated } = useAuth();

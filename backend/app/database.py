@@ -75,6 +75,7 @@ def sync_db_sequences(bind_engine=None) -> list[dict]:
                 ("document_chunks", "id"),
                 ("comments", "id"),
                 ("otp_challenges", "id"),
+                ("topics", "id"),
             ]
             for t_name, c_name in app_tables:
                 try:
@@ -143,6 +144,30 @@ def init_db() -> None:
         except Exception as e:
             logger.warning("CREATE EXTENSION IF NOT EXISTS vector skipped or non-fatal: %s", e)
 
+    # Ensure topic tables exist with idempotent DDL
+    with engine.connect() as conn:
+        try:
+            conn.execute(text("""
+                CREATE TABLE IF NOT EXISTS topics (
+                    id SERIAL PRIMARY KEY,
+                    name VARCHAR(50) UNIQUE NOT NULL,
+                    created_at TIMESTAMP WITH TIME ZONE DEFAULT NOW() NOT NULL
+                );
+            """))
+            conn.execute(text("CREATE INDEX IF NOT EXISTS ix_topics_name ON topics (name);"))
+            conn.execute(text("""
+                CREATE TABLE IF NOT EXISTS document_topics (
+                    document_id INTEGER NOT NULL REFERENCES documents(id) ON DELETE CASCADE,
+                    topic_id INTEGER NOT NULL REFERENCES topics(id) ON DELETE CASCADE,
+                    PRIMARY KEY (document_id, topic_id)
+                );
+            """))
+            conn.execute(text("CREATE INDEX IF NOT EXISTS ix_document_topics_document_id ON document_topics (document_id);"))
+            conn.execute(text("CREATE INDEX IF NOT EXISTS ix_document_topics_topic_id ON document_topics (topic_id);"))
+            conn.commit()
+        except Exception as e:
+            logger.warning("Topic tables creation non-fatal or skipped: %s", e)
+
     Base.metadata.create_all(bind=engine)
 
     # Ensure is_verified exists on existing users table without requiring Alembic
@@ -153,8 +178,35 @@ def init_db() -> None:
         except Exception as e:
             logger.warning("ALTER TABLE users ADD COLUMN is_verified non-fatal: %s", e)
 
+    # Seed canonical initial topics if topics table is empty
+    with engine.connect() as conn:
+        try:
+            count = conn.execute(text("SELECT count(*) FROM topics;")).scalar() or 0
+            if count == 0:
+                initial_topics = [
+                    'Artificial Intelligence',
+                    'Machine Learning',
+                    'Computer Science',
+                    'Medicine',
+                    'Economics',
+                    'Policy & Governance',
+                    'Physics',
+                    'Mathematics',
+                    'Biology',
+                    'Data Science',
+                ]
+                for t in initial_topics:
+                    conn.execute(
+                        text("INSERT INTO topics (name) VALUES (:name) ON CONFLICT (name) DO NOTHING;"),
+                        {"name": t},
+                    )
+                conn.commit()
+        except Exception as e:
+            logger.warning("Topic seeding non-fatal: %s", e)
+
     # Synchronize primary key sequences with existing table data
     sync_db_sequences(bind_engine=engine)
+
 
 
 

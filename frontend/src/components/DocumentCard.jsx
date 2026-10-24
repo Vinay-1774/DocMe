@@ -11,27 +11,10 @@ export default function DocumentCard({ doc, onDelete }) {
   const fileType = (doc.file_type || 'pdf').toLowerCase();
   const isPrivate = doc.visibility === 'private';
 
-  // Derive relevant topic tags from document title/description keywords
-  const deriveTags = () => {
-    const text = `${doc.title} ${doc.description || ''}`.toLowerCase();
-    const candidateTags = [
-      { key: 'ai', label: 'AI' },
-      { key: 'machine learning', label: 'Machine Learning' },
-      { key: 'neural', label: 'Deep Learning' },
-      { key: 'health', label: 'Medicine' },
-      { key: 'policy', label: 'Public Policy' },
-      { key: 'governance', label: 'Governance' },
-      { key: 'technology', label: 'Technology' },
-      { key: 'science', label: 'Science' },
-      { key: 'economics', label: 'Economics' },
-      { key: 'data', label: 'Data Science' },
-    ];
-    const matched = candidateTags.filter((t) => text.includes(t.key)).map((t) => t.label);
-    if (matched.length > 0) return matched.slice(0, 3);
-    return ['Research'];
-  };
-
-  const tags = deriveTags();
+  // Real topic categorization from backend database (with Uncategorized fallback)
+  const topicsList = Array.isArray(doc.topics) && doc.topics.length > 0
+    ? doc.topics
+    : ['Uncategorized'];
 
   return (
     <article className="document-card animate-fade-in">
@@ -86,8 +69,11 @@ export default function DocumentCard({ doc, onDelete }) {
         )}
 
         <div className="card-tags">
-          {tags.map((tag) => (
-            <span key={tag} className="card-tag">
+          {topicsList.map((tag) => (
+            <span
+              key={tag}
+              className={`card-tag ${tag.toLowerCase() === 'uncategorized' ? 'uncategorized' : ''}`}
+            >
               {tag}
             </span>
           ))}

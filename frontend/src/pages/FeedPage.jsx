@@ -11,12 +11,21 @@ import {
 } from 'lucide-react';
 import AppLayout from '../layouts/AppLayout.jsx';
 import DocumentCard from '../components/DocumentCard.jsx';
+import ProtectedRoute from '../components/ProtectedRoute.jsx';
 import { api } from '../services/api.js';
 import { useAuth } from '../hooks/useAuth.js';
 import { getInitials } from '../utils/format.js';
 import './FeedPage.css';
 
 export default function FeedPage() {
+  return (
+    <ProtectedRoute>
+      <FeedPageContent />
+    </ProtectedRoute>
+  );
+}
+
+function FeedPageContent() {
   const { user } = useAuth();
   const [searchParams, setSearchParams] = useSearchParams();
 
@@ -45,17 +54,18 @@ export default function FeedPage() {
       setError(null);
 
       let results = [];
+      const topicFilter = topic && topic !== 'All Topics' ? topic : null;
 
       // If search query is present, use the real semantic search endpoint
       if (query.trim()) {
-        results = await api.searchDocuments(query.trim(), 25);
+        results = await api.searchDocuments(query.trim(), 25, topicFilter);
       } else if (sort === 'popular') {
-        // Fetch popular documents
-        const popular = await api.getPopularDocuments();
+        // Fetch popular documents with optional topic filter
+        const popular = await api.getPopularDocuments(topicFilter);
         results = popular || [];
       } else {
-        // Fetch standard public feed
-        const feed = await api.getFeed();
+        // Fetch standard public feed with optional topic filter
+        const feed = topicFilter ? await api.getFeed(topicFilter) : await api.getFeed();
         results = feed || [];
       }
 
@@ -92,25 +102,11 @@ export default function FeedPage() {
 
   const handleSelectTopic = (topic) => {
     setActiveTopic(topic);
-    if (topic === 'All Topics') {
-      loadFeed(searchQuery, 'All Topics', activeSort);
-    } else {
-      // Query documents relating to the topic
-      loadFeed(topic, topic, activeSort);
-    }
+    loadFeed(searchQuery, topic, activeSort);
   };
 
-  // Client-side topic filtering if feed returns mixed topics
-  const filteredDocuments = useMemo(() => {
-    if (!documents) return [];
-    if (activeTopic === 'All Topics' || searchQuery.trim()) return documents;
-
-    const topicKey = activeTopic.toLowerCase();
-    return documents.filter((doc) => {
-      const text = `${doc.title} ${doc.description || ''}`.toLowerCase();
-      return text.includes(topicKey);
-    });
-  }, [documents, activeTopic, searchQuery]);
+  // Documents returned are directly from the backend API (with real database topic filtering)
+  const filteredDocuments = documents;
 
   return (
     <AppLayout

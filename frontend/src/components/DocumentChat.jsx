@@ -37,13 +37,22 @@ export default function DocumentChat({ documentId, docTitle = 'this document' })
     }
   }, [messages, generating]);
 
-  // Adjust textarea height dynamically
+  // Auto-resize textarea dynamically based on content (bounded between 36px and 120px)
+  useEffect(() => {
+    const el = textareaRef.current;
+    if (!el) return;
+    if (!input) {
+      el.style.height = '36px';
+    } else {
+      el.style.height = 'auto';
+      const scrollH = el.scrollHeight;
+      const clampedHeight = Math.min(Math.max(scrollH, 36), 120);
+      el.style.height = `${clampedHeight}px`;
+    }
+  }, [input]);
+
   const handleInputChange = (e) => {
     setInput(e.target.value);
-    if (textareaRef.current) {
-      textareaRef.current.style.height = 'auto';
-      textareaRef.current.style.height = `${Math.min(textareaRef.current.scrollHeight, 120)}px`;
-    }
   };
 
   const handleSend = async (questionToSend) => {
@@ -55,11 +64,8 @@ export default function DocumentChat({ documentId, docTitle = 'this document' })
       return;
     }
 
-    // Reset input
+    // Reset input (height will reset automatically via useEffect)
     setInput('');
-    if (textareaRef.current) {
-      textareaRef.current.style.height = 'auto';
-    }
     setError(null);
 
     const userMsgId = Date.now();

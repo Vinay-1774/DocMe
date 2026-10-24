@@ -330,25 +330,37 @@ export const api = {
     clearAuth();
   },
 
-  // Discovery & Feed
-  async getFeed() {
-    return apiRequest('/feed', {
+  // Topics & Categories
+  async getTopics(all = false) {
+    const query = all ? '?all=true' : '';
+    return apiRequest(`/topics${query}`, {
       method: 'GET',
       authRequired: false,
     });
   },
 
-  async searchDocuments(query, limit = 10, fetchOptions = {}) {
+  // Discovery & Feed
+  async getFeed(topic = null) {
+    const query = topic && topic !== 'All Topics' ? `?topic=${encodeURIComponent(topic)}` : '';
+    return apiRequest(`/feed${query}`, {
+      method: 'GET',
+      authRequired: false,
+    });
+  },
+
+  async searchDocuments(query, limit = 10, topic = null, fetchOptions = {}) {
     const q = encodeURIComponent(query.trim());
-    return apiRequest(`/documents/search?q=${q}&limit=${limit}`, {
+    const topicParam = topic && topic !== 'All Topics' ? `&topic=${encodeURIComponent(topic)}` : '';
+    return apiRequest(`/documents/search?q=${q}&limit=${limit}${topicParam}`, {
       method: 'GET',
       authRequired: false,
       ...fetchOptions,
     });
   },
 
-  async getPopularDocuments() {
-    return apiRequest('/documents/popular', {
+  async getPopularDocuments(topic = null) {
+    const query = topic && topic !== 'All Topics' ? `?topic=${encodeURIComponent(topic)}` : '';
+    return apiRequest(`/documents/popular${query}`, {
       method: 'GET',
       authRequired: false,
     });
@@ -377,8 +389,11 @@ export const api = {
   },
 
   // Documents
-  async getDocuments(filterBy = null) {
-    const query = filterBy ? `?filter_by=${encodeURIComponent(filterBy)}` : '';
+  async getDocuments(filterBy = null, topic = null) {
+    const params = new URLSearchParams();
+    if (filterBy) params.append('filter_by', filterBy);
+    if (topic && topic !== 'All Topics') params.append('topic', topic);
+    const query = params.toString() ? `?${params.toString()}` : '';
     return apiRequest(`/documents${query}`, {
       method: 'GET',
       authRequired: true,

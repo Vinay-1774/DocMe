@@ -1,5 +1,5 @@
 import React, { useState } from 'react';
-import { Link, useNavigate, useLocation } from 'react-router-dom';
+import { Link, useNavigate, useLocation, Navigate } from 'react-router-dom';
 import { FileText, ArrowRight, AlertCircle, Eye, EyeOff, Loader2 } from 'lucide-react';
 import { useAuth } from '../hooks/useAuth.js';
 import './Auth.css';
@@ -11,12 +11,38 @@ export default function LoginPage() {
   const [loading, setLoading] = useState(false);
   const [error, setError] = useState(null);
 
-  const { login } = useAuth();
+  const { login, isAuthenticated, isLoading } = useAuth();
   const navigate = useNavigate();
   const location = useLocation();
 
-  // Extract safe return destination
-  const from = location.state?.from?.pathname || new URLSearchParams(location.search).get('from') || '/';
+  // Extract safe return destination (preserving query parameters and avoiding redirect loops)
+  const statePath = location.state?.from
+    ? (typeof location.state.from === 'string'
+        ? location.state.from
+        : (location.state.from.pathname + (location.state.from.search || '')))
+    : null;
+  const rawFrom = location.state?.from?.pathname || statePath || new URLSearchParams(location.search).get('from') || '/';
+  const from = (rawFrom.startsWith('/login') || rawFrom.startsWith('/register')) ? '/' : rawFrom;
+
+  // While restoring session, display loading spinner rather than flashing login form
+  if (isLoading) {
+    return (
+      <div style={{
+        minHeight: '100vh',
+        display: 'flex',
+        alignItems: 'center',
+        justifyContent: 'center',
+        backgroundColor: 'var(--bg-app)',
+      }}>
+        <div className="pdf-spinner" style={{ width: '36px', height: '36px' }} />
+      </div>
+    );
+  }
+
+  // If already authenticated, redirect to destination immediately without redirect loop
+  if (isAuthenticated) {
+    return <Navigate to={from} replace />;
+  }
 
   const handleSubmit = async (e) => {
     e.preventDefault();
@@ -152,12 +178,6 @@ export default function LoginPage() {
             className="auth-link"
           >
             Create an account
-          </Link>
-        </p>
-
-        <p className="auth-footer-text" style={{ marginTop: '-0.5rem' }}>
-          <Link to="/" className="auth-link" style={{ color: 'var(--text-muted)' }}>
-            ← Back to Home Feed
           </Link>
         </p>
       </div>
