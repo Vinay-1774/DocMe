@@ -141,7 +141,7 @@ export default function DocumentChat({ documentId, docTitle = 'this document' })
             <span className="chat-header-title">AI Research Assistant</span>
             <span className="chat-header-status">
               <span className="status-dot" />
-              <span>LangGraph RAG • Ready</span>
+              <span>AI Assistant • Ready</span>
             </span>
           </div>
         </div>
@@ -168,7 +168,7 @@ export default function DocumentChat({ documentId, docTitle = 'this document' })
             </div>
             <h3 className="chat-hero-title">Ask about this paper</h3>
             <p className="chat-hero-desc">
-              Answers are strictly grounded in this document's text chunks with citations.
+              Answers are based directly on this document with clear citations.
             </p>
 
             <div className="suggested-chips-container">
@@ -217,8 +217,8 @@ export default function DocumentChat({ documentId, docTitle = 'this document' })
                         <div className="sources-list">
                           {msg.sources.map((src, sIdx) => {
                             const pageInfo = src.page_number ? `Page ${src.page_number}` : null;
-                            const chunkInfo = src.chunk_index !== undefined ? `Chunk ${src.chunk_index}` : null;
-                            const label = [pageInfo, chunkInfo].filter(Boolean).join(', ') || `Doc #${src.document_id}`;
+                            const sectionInfo = src.chunk_index !== undefined ? `Section ${src.chunk_index + 1}` : null;
+                            const label = [pageInfo, sectionInfo].filter(Boolean).join(', ') || `Doc #${src.document_id}`;
                             return (
                               <span key={sIdx} className="source-badge">
                                 {label}
@@ -239,9 +239,9 @@ export default function DocumentChat({ documentId, docTitle = 'this document' })
           <div style={{
             padding: '0.75rem 1rem',
             backgroundColor: 'var(--danger-red-subtle)',
-            border: '1px solid rgba(239, 68, 68, 0.3)',
+            border: '1px solid rgba(185, 28, 28, 0.25)',
             borderRadius: 'var(--radius-md)',
-            color: '#FCA5A5',
+            color: 'var(--danger-red)',
             fontSize: '0.8125rem',
             display: 'flex',
             alignItems: 'center',
@@ -262,7 +262,7 @@ export default function DocumentChat({ documentId, docTitle = 'this document' })
             placeholder={
               isAuthenticated
                 ? `Ask anything about "${docTitle}"...`
-                : 'Please sign in to ask questions about this paper'
+                : 'Please log in to ask questions about this document'
             }
             value={input}
             onChange={handleInputChange}

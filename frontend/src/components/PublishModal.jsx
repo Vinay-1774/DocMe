@@ -383,7 +383,7 @@ export default function PublishModal({ isOpen, onClose, onSuccess }) {
               )}
               <div className="success-ai-status">
                 <Sparkles size={13} />
-                <span>AI indexing complete • Vector embeddings active</span>
+                <span>Document ready • AI assistant enabled</span>
               </div>
             </div>
 
@@ -424,7 +424,7 @@ export default function PublishModal({ isOpen, onClose, onSuccess }) {
             {loading && (
               <div className="upload-progress-banner" aria-live="polite">
                 <Loader2 size={18} className="upload-spinner" />
-                <span>Uploading document and generating AI vector embeddings...</span>
+                <span>Uploading document and preparing AI assistant...</span>
               </div>
             )}
 

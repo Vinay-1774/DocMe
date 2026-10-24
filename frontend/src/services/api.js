@@ -128,12 +128,12 @@ export class ApiError extends Error {
 
 function parseErrorMessage(data, status) {
   if (!data) {
-    if (status === 401) return 'Unauthorized. Please log in.';
-    if (status === 403) return 'You are not authorized to perform this action.';
-    if (status === 404) return 'Requested resource was not found.';
-    if (status === 413) return 'File size exceeds maximum allowed upload limit.';
-    if (status >= 500) return 'A server error occurred. Please try again.';
-    return `Request failed with status ${status}.`;
+    if (status === 401) return 'Please log in to continue.';
+    if (status === 403) return "You don't have permission to perform this action.";
+    if (status === 404) return 'The requested item could not be found.';
+    if (status === 413) return 'This file is too large to upload.';
+    if (status >= 500) return 'Something went wrong on our end. Please try again.';
+    return 'Something went wrong. Please try again.';
   }
 
   if (typeof data === 'string') return data;

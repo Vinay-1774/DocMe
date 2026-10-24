@@ -58,7 +58,7 @@ export default function LoginPage() {
       // Return user to intended destination or home
       navigate(from, { replace: true });
     } catch (err) {
-      setError(err.message || 'Invalid credentials. Please verify your email and password.');
+      setError(err.message || 'Incorrect email or password. Please try again.');
     } finally {
       setLoading(false);
     }
@@ -81,7 +81,7 @@ export default function LoginPage() {
         {/* Notice if redirected from a protected page */}
         {from !== '/' && !error && (
           <div className="auth-alert-info">
-            <span>Please sign in to continue to your requested page.</span>
+            <span>Please log in to continue.</span>
           </div>
         )}
 

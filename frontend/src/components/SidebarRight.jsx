@@ -156,7 +156,7 @@ export default function SidebarRight() {
           </div>
         </div>
         <p>
-          Ask questions against any paper in our library. Powered by LangGraph RAG with inline citations and document chunk retrieval.
+          Ask questions about any document in the library and get clear answers with direct citations.
         </p>
       </div>
     </aside>

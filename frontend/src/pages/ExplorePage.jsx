@@ -377,7 +377,7 @@ function ExplorePageContent() {
                   onClick={() => executeSearch(queryParam)}
                 >
                   <RefreshCw size={14} />
-                  <span>Retry Search</span>
+                  <span>Try Again</span>
                 </button>
               </div>
             )}
@@ -388,10 +388,10 @@ function ExplorePageContent() {
                 <div className="empty-state-icon">
                   <SearchX size={26} />
                 </div>
-                <h3 className="empty-state-title">No matching research found</h3>
+                <h3 className="empty-state-title">No matching documents found</h3>
                 <p className="empty-state-desc">
-                  We couldn&apos;t find any papers matching &ldquo;{queryParam}&rdquo;. Try using different
-                  keywords or explore one of our topic shortcuts.
+                  We couldn&apos;t find any documents matching &ldquo;{queryParam}&rdquo;. Try using different
+                  keywords or clear the search filter.
                 </p>
                 <div style={{ display: 'flex', gap: '0.5rem', flexWrap: 'wrap', justifyContent: 'center' }}>
                   <button
@@ -399,7 +399,7 @@ function ExplorePageContent() {
                     className="btn-reset-search"
                     onClick={handleClearSearch}
                   >
-                    <span>Back to Discovery</span>
+                    <span>Clear Search</span>
                   </button>
                 </div>
               </div>

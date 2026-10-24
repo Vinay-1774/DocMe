@@ -35,13 +35,14 @@
   left: 0;
   right: 0;
   z-index: 40;
-  background-color: rgba(11, 15, 20, 0.95);
+  background-color: rgba(255, 255, 255, 0.95);
   backdrop-filter: blur(12px);
   -webkit-backdrop-filter: blur(12px);
   border-top: 1px solid var(--border-subtle);
   padding: 0.5rem 1rem calc(0.5rem + env(safe-area-inset-bottom));
   justify-content: space-around;
   align-items: center;
+  box-shadow: 0 -2px 10px rgba(48, 36, 61, 0.05);
 }
 
 .mobile-nav-btn {
@@ -59,11 +60,11 @@
 }
 
 .mobile-nav-btn.active {
-  color: var(--primary-emerald);
+  color: var(--primary-brand);
 }
 
 .mobile-nav-btn.publish-pill {
-  color: var(--primary-emerald);
+  color: var(--primary-brand);
   transform: translateY(-4px);
 }
 
@@ -71,12 +72,12 @@
   width: 38px;
   height: 38px;
   border-radius: var(--radius-full);
-  background: var(--primary-emerald);
-  color: #0B0F14;
+  background: var(--primary-brand);
+  color: #FFFFFF;
   display: flex;
   align-items: center;
   justify-content: center;
-  box-shadow: 0 0 12px rgba(16, 185, 129, 0.35);
+  box-shadow: 0 4px 12px rgba(126, 34, 206, 0.35);
 }
 
 /* Responsive */

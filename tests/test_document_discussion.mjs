@@ -111,7 +111,7 @@ console.log('  PASSED\n');
 // Test 10: CSS Palette & Tokens
 console.log('Test 10: CSS Tokens & Responsive Design');
 assert.ok(discussionCss.includes('var(--bg-surface)'), 'Must use surface background token');
-assert.ok(discussionCss.includes('var(--primary-emerald)'), 'Must use emerald accent token');
+assert.ok(discussionCss.includes('var(--primary-brand)') || discussionCss.includes('var(--primary-emerald)'), 'Must use primary brand/emerald accent token');
 assert.ok(discussionCss.includes('var(--border-subtle)'), 'Must use subtle border token');
 assert.ok(discussionCss.includes('.comment-card'), 'Must define readable comment cards');
 console.log('  PASSED\n');

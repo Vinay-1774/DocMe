@@ -93,30 +93,30 @@ button,
   outline: none;
 }
 
-/* Primary Emerald Action (e.g. Publish Document, Open Document, Main Actions) */
+/* Primary Plum / Purple Action (e.g. Publish Document, Open Document, Main Actions) */
 .btn-primary {
-  background-color: var(--primary-emerald);
-  color: #0B0F14;
-  border-color: var(--primary-emerald);
-  box-shadow: 0 0 12px rgba(16, 185, 129, 0.22);
+  background-color: var(--primary-brand);
+  color: #FFFFFF;
+  border-color: var(--primary-brand);
+  box-shadow: 0 2px 8px rgba(126, 34, 206, 0.22);
 }
 
 .btn-primary:hover:not(:disabled) {
-  background-color: var(--primary-emerald-hover);
-  border-color: var(--primary-emerald-hover);
-  color: #0B0F14;
-  box-shadow: 0 0 18px rgba(16, 185, 129, 0.38);
+  background-color: var(--primary-brand-hover);
+  border-color: var(--primary-brand-hover);
+  color: #FFFFFF;
+  box-shadow: 0 4px 14px rgba(126, 34, 206, 0.35);
   transform: translateY(-1px);
   text-decoration: none;
 }
 
 .btn-primary:active:not(:disabled) {
   transform: translateY(0);
-  box-shadow: 0 0 8px rgba(16, 185, 129, 0.25);
+  box-shadow: 0 2px 6px rgba(126, 34, 206, 0.2);
 }
 
 .btn-primary:focus-visible {
-  outline: 2px solid var(--primary-emerald);
+  outline: 2px solid var(--primary-brand);
   outline-offset: 2px;
 }
 
@@ -130,16 +130,17 @@ button,
 /* Secondary Surface Action (e.g. Cancel, Secondary Download, Done, Dismiss) */
 .btn-secondary,
 .pdf-btn-download {
-  background-color: var(--bg-surface-secondary);
+  background-color: var(--bg-surface);
   color: var(--text-primary);
   border: 1px solid var(--border-medium);
+  box-shadow: var(--shadow-sm);
 }
 
 .btn-secondary:hover:not(:disabled),
 .pdf-btn-download:hover:not(:disabled) {
   background-color: var(--bg-surface-hover);
-  border-color: var(--border-medium);
-  color: var(--text-primary);
+  border-color: var(--border-strong);
+  color: var(--primary-brand);
   transform: translateY(-1px);
   text-decoration: none;
 }
@@ -151,9 +152,9 @@ button,
 
 .btn-secondary:focus-visible,
 .pdf-btn-download:focus-visible {
-  outline: 2px solid var(--primary-emerald);
+  outline: 2px solid var(--primary-brand);
   outline-offset: 2px;
-  border-color: var(--primary-emerald);
+  border-color: var(--primary-brand);
 }
 
 .btn-secondary:disabled,
@@ -186,8 +187,8 @@ button,
 input, textarea, select {
   font-family: inherit;
   font-size: inherit;
-  color: inherit;
-  background: transparent;
+  color: var(--text-primary);
+  background: var(--bg-input);
   border: 1px solid var(--border-subtle);
   border-radius: var(--radius-md);
   outline: none;
@@ -195,8 +196,8 @@ input, textarea, select {
 }
 
 input:focus, textarea:focus, select:focus {
-  border-color: var(--primary-emerald);
-  box-shadow: 0 0 0 2px var(--primary-emerald-subtle);
+  border-color: var(--primary-brand);
+  box-shadow: 0 0 0 3px var(--focus-ring);
 }
 
 /* Clean unbordered textareas inside unified input containers (e.g. AI chat bar) */
@@ -210,7 +211,7 @@ textarea.chat-textarea:focus-visible {
   border-radius: 0 !important;
 }
 
-/* Custom modern dark scrollbar */
+/* Custom light lavender & plum scrollbar */
 ::-webkit-scrollbar {
   width: 8px;
   height: 8px;
@@ -226,12 +227,12 @@ textarea.chat-textarea:focus-visible {
 }
 
 ::-webkit-scrollbar-thumb:hover {
-  background: var(--text-muted);
+  background: var(--border-strong);
 }
 
 /* Focus outlines for keyboard accessibility */
 :focus-visible {
-  outline: 2px solid var(--primary-emerald);
+  outline: 2px solid var(--primary-brand);
   outline-offset: 2px;
 }
 

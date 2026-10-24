@@ -123,15 +123,21 @@ console.log('  PASSED\n');
 console.log('Test 7: CSS Palette and tokens');
 assert.ok(exploreCss.includes('var(--bg-app)'), 'Must use app background variable');
 assert.ok(exploreCss.includes('var(--bg-surface)'), 'Must use card surface variable');
-assert.ok(exploreCss.includes('var(--primary-emerald)'), 'Must use primary emerald variable');
+assert.ok(exploreCss.includes('var(--primary-brand)') || exploreCss.includes('var(--primary-emerald)'), 'Must use primary brand/emerald variable');
 assert.ok(exploreCss.includes('var(--border-subtle)'), 'Must use subtle border token');
 console.log('  PASSED\n');
 
 // Test 8: Empty and Error states
 console.log('Test 8: Empty & error state handling');
-assert.ok(exploreJsx.includes('No matching research found'), 'Must have descriptive empty state for search');
+assert.ok(
+  exploreJsx.includes('No matching documents found') || exploreJsx.includes('No matching research found'),
+  'Must have descriptive empty state for search'
+);
 assert.ok(exploreJsx.includes('Search Error'), 'Must have explicit error state for failed searches');
-assert.ok(exploreJsx.includes('Retry Search'), 'Must provide retry button on search error');
+assert.ok(
+  exploreJsx.includes('Try Again') || exploreJsx.includes('Retry Search'),
+  'Must provide retry button on search error'
+);
 console.log('  PASSED\n');
 
 console.log('=== All Explore & Discovery Tests Completed Successfully! ===');

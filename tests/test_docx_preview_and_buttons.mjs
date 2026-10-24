@@ -134,8 +134,8 @@ test('Button Consistency: Global button system in index.css enforces design syst
   assert.ok(indexCss.includes('.btn-primary'), 'index.css must define .btn-primary');
   assert.ok(indexCss.includes('.btn-secondary'), 'index.css must define .btn-secondary');
   assert.ok(indexCss.includes('.pdf-btn-download'), 'index.css must define .pdf-btn-download');
-  assert.ok(indexCss.includes('var(--primary-emerald)'), 'btn-primary must use emerald primary accent');
-  assert.ok(indexCss.includes('var(--bg-surface-secondary)'), 'btn-secondary must use dark surface background');
+  assert.ok(indexCss.includes('var(--primary-brand)') || indexCss.includes('var(--primary-emerald)'), 'btn-primary must use primary accent');
+  assert.ok(indexCss.includes('var(--bg-surface)') || indexCss.includes('var(--bg-surface-secondary)'), 'btn-secondary must use surface background');
   assert.ok(indexCss.includes('border-radius: var(--radius-md)'), 'Buttons must use rounded corners');
   assert.ok(indexCss.includes(':focus-visible'), 'Buttons must define keyboard accessibility focus outlines');
   assert.ok(indexCss.includes(':disabled'), 'Buttons must define disabled states');

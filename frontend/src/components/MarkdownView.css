@@ -28,7 +28,7 @@
 .markdown-heading-3 {
   font-size: 0.9375rem;
   font-weight: 600;
-  color: var(--primary-emerald);
+  color: var(--primary-brand);
   margin-top: 0.25rem;
 }
 
@@ -40,22 +40,22 @@
 }
 
 .markdown-code-block {
-  background-color: var(--bg-surface-secondary);
+  background-color: var(--bg-muted);
   border: 1px solid var(--border-subtle);
   border-radius: var(--radius-md);
   padding: 0.75rem 1rem;
   font-family: var(--font-mono);
   font-size: 0.8125rem;
   overflow-x: auto;
-  color: #A7F3D0;
+  color: var(--primary-button-hover);
 }
 
 .inline-code {
-  background-color: var(--bg-surface-secondary);
+  background-color: var(--bg-muted);
   padding: 0.15rem 0.35rem;
   border-radius: var(--radius-sm);
   font-family: var(--font-mono);
   font-size: 0.8125rem;
-  color: #6EE7B7;
+  color: var(--primary-brand);
   border: 1px solid var(--border-subtle);
 }

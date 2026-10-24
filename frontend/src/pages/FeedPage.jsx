@@ -274,7 +274,7 @@ function FeedPageContent() {
               style={{ marginTop: '0.5rem' }}
             >
               <RefreshCw size={14} />
-              <span>Retry</span>
+              <span>Try Again</span>
             </button>
           </div>
         ) : filteredDocuments.length === 0 ? (
@@ -284,12 +284,12 @@ function FeedPageContent() {
               <BookOpen size={28} />
             </div>
             <h2 className="empty-state-title">
-              {searchQuery ? 'No Matching Research Papers' : 'No Documents Available Yet'}
+              {searchQuery ? 'No Matching Documents Found' : 'No Documents Yet'}
             </h2>
             <p className="empty-state-desc">
               {searchQuery
                 ? `No documents found matching "${searchQuery}". Try searching for another topic or clear the filter.`
-                : 'The library is ready for its first contributions. Publish a paper or preprint to start the discussion.'}
+                : 'No documents yet. Upload your first document to get started.'}
             </p>
             {searchQuery ? (
               <button
@@ -309,7 +309,7 @@ function FeedPageContent() {
                 }}
               >
                 <Plus size={16} />
-                <span>Publish the First Document</span>
+                <span>Upload Document</span>
               </button>
             )}
           </div>

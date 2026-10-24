@@ -1,64 +1,109 @@
 /**
- * DocMe Design System Tokens
- * Strict adherence to visual requirements:
- * - Background: #0B0F14
- * - Card surfaces: #151B23
- * - Secondary surfaces: #1C2430
- * - Primary emerald: #10B981
- * - Secondary AI accent: #6366F1
- * - Highlight color: #F59E0B
- * - Primary text: #F8FAFC
- * - Secondary text: #9CA3AF
- * - Borders: subtle dark-grey with contrast (#222B38 / #2D3748)
+ * DocMe Design System Tokens — Lavender & Plum Light Theme
+ *
+ * Core palette:
+ * - Main background: #F7F5FC
+ * - Cards and primary surfaces: #FFFFFF
+ * - Primary brand color: #7E22CE
+ * - Primary text: #30243D
+ * - Borders and dividers: #E7DFF0
+ * - Secondary text: #6F647D
+ * - Muted backgrounds: #F0EAF8
+ * - Subtle hover background: #F3EDFA
+ * - Input background: #FFFFFF
+ * - Focus ring: #7E22CE (rgba(126, 34, 206, 0.25))
+ *
+ * Purple interaction palette:
+ * - Primary button: #7E22CE (hover: #6B21A8)
+ * - Light purple surface: #F3E8FF
+ * - Selected navigation background: #F0E5FC
+ * - Selected navigation text: #6B21A8
+ * - AI accent: #7C3AED (surface: #F3E8FF)
+ *
+ * Semantic colors:
+ * - Success: #15803D
+ * - Warning: #B45309
+ * - Error: #B91C1C
+ * - Informational: #2563EB
  */
 
 :root {
-  /* Brand Palettes */
-  --bg-app: #0B0F14;
-  --bg-surface: #151B23;
-  --bg-surface-secondary: #1C2430;
-  --bg-surface-elevated: #212B3B;
-  --bg-surface-hover: #263345;
+  /* Core Surface & Background Palette */
+  --bg-app: #F7F5FC;
+  --bg-surface: #FFFFFF;
+  --bg-surface-secondary: #F0EAF8;
+  --bg-surface-elevated: #FFFFFF;
+  --bg-surface-hover: #F3EDFA;
+  --bg-muted: #F0EAF8;
+  --bg-input: #FFFFFF;
 
-  /* Primary Emerald */
-  --primary-emerald: #10B981;
-  --primary-emerald-hover: #059669;
-  --primary-emerald-subtle: rgba(16, 185, 129, 0.12);
-  --primary-emerald-border: rgba(16, 185, 129, 0.3);
+  /* Primary Brand (Plum & Purple) */
+  --primary-brand: #7E22CE;
+  --primary-brand-hover: #6B21A8;
+  --primary-brand-subtle: #F3E8FF;
+  --primary-brand-border: #E7DFF0;
+  --primary-brand-selected-bg: #F0E5FC;
+  --primary-brand-selected-text: #6B21A8;
 
-  /* Secondary AI Accent */
-  --ai-indigo: #6366F1;
-  --ai-indigo-hover: #4F46E5;
-  --ai-indigo-subtle: rgba(99, 102, 241, 0.14);
-  --ai-indigo-border: rgba(99, 102, 241, 0.3);
+  /* Backward-compatible alias for existing components and tests */
+  --primary-emerald: var(--primary-brand);
+  --primary-emerald-hover: var(--primary-brand-hover);
+  --primary-emerald-subtle: var(--primary-brand-subtle);
+  --primary-emerald-border: var(--primary-brand-border);
 
-  /* Highlight Amber */
-  --highlight-amber: #F59E0B;
-  --highlight-amber-subtle: rgba(245, 158, 11, 0.12);
-  --highlight-amber-border: rgba(245, 158, 11, 0.3);
+  /* AI Accent (Violet) */
+  --ai-accent: #7C3AED;
+  --ai-accent-hover: #6D28D9;
+  --ai-accent-surface: #F3E8FF;
+  --ai-accent-subtle: #F3E8FF;
+  --ai-accent-border: #DDD6FE;
+  --ai-indigo: var(--ai-accent);
+  --ai-indigo-hover: var(--ai-accent-hover);
+  --ai-indigo-subtle: var(--ai-accent-subtle);
+  --ai-indigo-border: var(--ai-accent-border);
+  --ai-indigo-light: #6D28D9;
 
-  /* Danger / Destructive */
-  --danger-red: #EF4444;
-  --danger-red-hover: #DC2626;
-  --danger-red-subtle: rgba(239, 68, 68, 0.12);
+  /* Semantic Feedback Colors */
+  --success-green: #15803D;
+  --success-green-subtle: #DCFCE7;
+  --success-green-border: #86EFAC;
+
+  --warning-amber: #B45309;
+  --warning-amber-subtle: #FEF3C7;
+  --warning-amber-border: #FCD34D;
+  --highlight-amber: var(--warning-amber);
+  --highlight-amber-subtle: var(--warning-amber-subtle);
+  --highlight-amber-border: var(--warning-amber-border);
+
+  --danger-red: #B91C1C;
+  --danger-red-hover: #991B1B;
+  --danger-red-subtle: #FEE2E2;
+  --danger-red-border: #FCA5A5;
+
+  --info-blue: #2563EB;
+  --info-blue-subtle: #DBEAFE;
+  --info-blue-border: #93C5FD;
 
   /* Typography Colors */
-  --text-primary: #F8FAFC;
-  --text-secondary: #9CA3AF;
-  --text-muted: #64748B;
-  --text-inverse: #0B0F14;
+  --text-primary: #30243D;
+  --text-secondary: #6F647D;
+  --text-muted: #8E829D;
+  --text-inverse: #FFFFFF;
 
   /* Borders & Dividers */
-  --border-subtle: #222B38;
-  --border-medium: #2E3A4D;
-  --border-focus: #10B981;
+  --border-subtle: #E7DFF0;
+  --border-medium: #D8CCE4;
+  --border-strong: #C4B5D6;
+  --border-focus: #7E22CE;
+  --focus-ring: rgba(126, 34, 206, 0.25);
 
-  /* Elevations & Shadows */
-  --shadow-sm: 0 1px 2px 0 rgba(0, 0, 0, 0.35);
-  --shadow-md: 0 4px 6px -1px rgba(0, 0, 0, 0.4), 0 2px 4px -2px rgba(0, 0, 0, 0.3);
-  --shadow-lg: 0 10px 15px -3px rgba(0, 0, 0, 0.5), 0 4px 6px -4px rgba(0, 0, 0, 0.4);
-  --shadow-emerald: 0 0 16px rgba(16, 185, 129, 0.18);
-  --shadow-indigo: 0 0 16px rgba(99, 102, 241, 0.22);
+  /* Elevations & Soft Shadows */
+  --shadow-sm: 0 1px 3px rgba(48, 36, 61, 0.05);
+  --shadow-md: 0 4px 8px -2px rgba(48, 36, 61, 0.07), 0 2px 4px -2px rgba(48, 36, 61, 0.04);
+  --shadow-lg: 0 10px 20px -3px rgba(48, 36, 61, 0.09), 0 4px 6px -4px rgba(48, 36, 61, 0.04);
+  --shadow-purple: 0 4px 14px rgba(126, 34, 206, 0.22);
+  --shadow-emerald: var(--shadow-purple);
+  --shadow-indigo: 0 4px 14px rgba(124, 58, 237, 0.22);
 
   /* Radii */
   --radius-sm: 6px;

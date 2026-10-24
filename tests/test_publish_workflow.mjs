@@ -139,7 +139,7 @@ console.log('  PASSED\n');
 // Test 9: CSS Design Tokens & Responsiveness
 console.log('Test 9: CSS Tokens & Responsive Layout');
 assert.ok(publishCss.includes('var(--bg-surface)'), 'Must use dark surface token');
-assert.ok(publishCss.includes('var(--primary-emerald)'), 'Must use primary emerald accent');
+assert.ok(publishCss.includes('var(--primary-brand)') || publishCss.includes('var(--primary-emerald)'), 'Must use primary brand/emerald accent');
 assert.ok(publishCss.includes('@media (max-width: 640px)'), 'Must have responsive mobile media query');
 console.log('  PASSED\n');
 

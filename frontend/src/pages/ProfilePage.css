@@ -18,7 +18,7 @@
 }
 
 .profile-back-link:hover {
-  color: var(--primary-emerald);
+  color: var(--primary-brand);
 }
 
 /* Creator Profile Card / Hero */
@@ -27,13 +27,13 @@
   border: 1px solid var(--border-subtle);
   border-radius: var(--radius-xl);
   overflow: hidden;
-  box-shadow: var(--shadow-md);
+  box-shadow: var(--shadow-sm);
   position: relative;
 }
 
 .profile-banner {
   height: 110px;
-  background: linear-gradient(135deg, rgba(16, 185, 129, 0.15) 0%, rgba(99, 102, 241, 0.15) 50%, rgba(21, 27, 35, 1) 100%);
+  background: linear-gradient(135deg, #F0E5FC 0%, #F3E8FF 50%, #EDE9FE 100%);
   border-bottom: 1px solid var(--border-subtle);
   position: relative;
 }
@@ -63,15 +63,15 @@
   width: 84px;
   height: 84px;
   border-radius: var(--radius-full);
-  background: linear-gradient(135deg, var(--bg-surface-elevated) 0%, var(--bg-surface-hover) 100%);
+  background: linear-gradient(135deg, #F3E8FF 0%, #FFFFFF 100%);
   border: 3px solid var(--bg-surface);
-  color: var(--primary-emerald);
+  color: var(--primary-brand);
   font-size: 2rem;
   font-weight: 800;
   display: flex;
   align-items: center;
   justify-content: center;
-  box-shadow: 0 0 20px rgba(0, 0, 0, 0.5);
+  box-shadow: 0 4px 16px rgba(48, 36, 61, 0.12);
 }
 
 .profile-hero-actions {
@@ -106,10 +106,10 @@
   align-items: center;
   gap: 0.35rem;
   padding: 0.2rem 0.6rem;
-  background-color: var(--primary-emerald-subtle);
-  border: 1px solid var(--primary-emerald-border);
+  background-color: var(--surface-purple-light);
+  border: 1px solid var(--border-subtle);
   border-radius: var(--radius-full);
-  color: var(--primary-emerald);
+  color: var(--primary-brand);
   font-size: 0.75rem;
   font-weight: 600;
 }
@@ -119,10 +119,10 @@
   align-items: center;
   gap: 0.35rem;
   padding: 0.2rem 0.6rem;
-  background-color: var(--ai-indigo-subtle);
-  border: 1px solid var(--ai-indigo-border);
+  background-color: var(--bg-muted);
+  border: 1px solid var(--border-subtle);
   border-radius: var(--radius-full);
-  color: #C7D2FE;
+  color: var(--primary-button-hover);
   font-size: 0.75rem;
   font-weight: 600;
 }
@@ -152,7 +152,7 @@
 }
 
 .stat-box {
-  background-color: var(--bg-surface-secondary);
+  background-color: var(--bg-muted);
   border: 1px solid var(--border-subtle);
   border-radius: var(--radius-lg);
   padding: 0.875rem 1rem;
@@ -163,7 +163,7 @@
 }
 
 .stat-box:hover {
-  background-color: var(--bg-surface-elevated);
+  background-color: var(--bg-surface-secondary);
   border-color: var(--border-medium);
 }
 
@@ -214,27 +214,27 @@
 
 .profile-tab-btn:hover {
   color: var(--text-primary);
-  background-color: var(--bg-surface);
+  background-color: var(--bg-surface-secondary);
 }
 
 .profile-tab-btn.active {
-  color: var(--primary-emerald);
-  background-color: var(--primary-emerald-subtle);
+  color: var(--selected-nav-text);
+  background-color: var(--selected-nav-bg);
 }
 
 .tab-count-pill {
   font-size: 0.6875rem;
   padding: 0.15rem 0.5rem;
   border-radius: var(--radius-full);
-  background-color: var(--bg-surface-elevated);
+  background-color: var(--bg-surface);
   color: var(--text-muted);
   border: 1px solid var(--border-subtle);
 }
 
 .profile-tab-btn.active .tab-count-pill {
-  background-color: rgba(16, 185, 129, 0.2);
-  color: var(--primary-emerald);
-  border-color: var(--primary-emerald-border);
+  background-color: var(--surface-purple-light);
+  color: var(--primary-button-hover);
+  border-color: var(--border-subtle);
 }
 
 /* Document Filter Pills & Search */
@@ -270,9 +270,9 @@
 }
 
 .filter-pill.active {
-  background-color: var(--bg-surface-elevated);
-  border-color: var(--primary-emerald);
-  color: var(--primary-emerald);
+  background-color: var(--selected-nav-bg);
+  border-color: var(--primary-brand);
+  color: var(--selected-nav-text);
   font-weight: 600;
 }
 
@@ -293,8 +293,8 @@
 }
 
 .profile-search-input:focus {
-  border-color: var(--primary-emerald);
-  box-shadow: 0 0 0 2px var(--primary-emerald-subtle);
+  border-color: var(--primary-brand);
+  box-shadow: 0 0 0 2px var(--focus-ring-color);
 }
 
 .profile-search-icon {
@@ -357,8 +357,8 @@
   padding: 0.75rem 1rem;
   border-radius: var(--radius-md);
   background-color: var(--danger-red-subtle);
-  border: 1px solid rgba(239, 68, 68, 0.3);
-  color: #FCA5A5;
+  border: 1px solid rgba(185, 28, 28, 0.25);
+  color: var(--danger-red);
   font-size: 0.8125rem;
   line-height: 1.45;
 }
@@ -380,7 +380,7 @@
 
 .btn-danger:hover:not(:disabled) {
   background-color: var(--danger-red-hover);
-  box-shadow: 0 0 14px rgba(239, 68, 68, 0.4);
+  box-shadow: 0 4px 12px rgba(185, 28, 28, 0.3);
 }
 
 .btn-danger:disabled {

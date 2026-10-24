@@ -72,7 +72,7 @@ export default function RegisterPage() {
 
     if (Object.keys(errors).length > 0) {
       setFieldErrors(errors);
-      setError('Please resolve the highlighted validation errors.');
+      setError('Please check the errors below and try again.');
       return;
     }
 
@@ -84,7 +84,7 @@ export default function RegisterPage() {
       await register(username.trim(), email.trim(), password);
       navigate(from, { replace: true });
     } catch (err) {
-      setError(err.message || 'Registration failed. The username or email might already be taken.');
+      setError(err.message || 'Could not create account. The username or email may already be in use.');
     } finally {
       setLoading(false);
     }

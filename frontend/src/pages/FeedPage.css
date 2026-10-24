@@ -96,12 +96,19 @@
 
 .btn-composer-cta {
   padding: 0.45rem 0.875rem;
-  background-color: var(--primary-emerald);
-  color: #0B0F14;
+  background-color: var(--primary-brand);
+  color: var(--text-on-primary, #FFFFFF);
   font-size: 0.8125rem;
   font-weight: 600;
   border-radius: var(--radius-full);
   flex-shrink: 0;
+  border: none;
+  cursor: pointer;
+  transition: background-color var(--transition-fast);
+}
+
+.btn-composer-cta:hover {
+  background-color: var(--primary-button-hover);
 }
 
 /* Tabs & Controls */
@@ -134,12 +141,12 @@
 
 .feed-tab:hover {
   color: var(--text-primary);
-  background-color: var(--bg-surface);
+  background-color: var(--bg-surface-secondary);
 }
 
 .feed-tab.active {
-  color: var(--primary-emerald);
-  background-color: var(--primary-emerald-subtle);
+  color: var(--selected-nav-text);
+  background-color: var(--selected-nav-bg);
 }
 
 /* Active Filter Pill */
@@ -210,8 +217,8 @@
   width: 54px;
   height: 54px;
   border-radius: var(--radius-full);
-  background-color: var(--primary-emerald-subtle);
-  color: var(--primary-emerald);
+  background-color: var(--surface-purple-light);
+  color: var(--primary-brand);
   display: flex;
   align-items: center;
   justify-content: center;

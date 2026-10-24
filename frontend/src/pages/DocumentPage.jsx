@@ -54,13 +54,13 @@ function DocumentPageContent() {
       } catch (err) {
         if (isMounted) {
           if (err.status === 401) {
-            setError('Please sign in to view this private document.');
+            setError('Please log in to view this private document.');
           } else if (err.status === 403) {
-            setError('You do not have authorization to access this private document.');
+            setError("You don't have permission to view this private document.");
           } else if (err.status === 404) {
             setError('This document could not be found.');
           } else {
-            setError(err.message || 'Failed to load document metadata.');
+            setError(err.message || "Couldn't load document details. Please try again.");
           }
         }
       } finally {

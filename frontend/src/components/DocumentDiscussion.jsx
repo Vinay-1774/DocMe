@@ -50,11 +50,11 @@ export default function DocumentDiscussion({
       }
     } catch (err) {
       if (err.status === 403) {
-        setError('You are not authorized to view comments for this private document.');
+        setError("You don't have permission to view discussion on this private document.");
       } else if (err.status === 401) {
         setError('Your session has expired. Please log in again.');
       } else {
-        setError(err.message || 'Unable to load comments at this time.');
+        setError(err.message || "Couldn't load comments. Please try again.");
       }
     } finally {
       setLoading(false);
@@ -71,7 +71,7 @@ export default function DocumentDiscussion({
     if (isSubmitting) return; // Prevent duplicate submissions
 
     if (!isAuthenticated) {
-      setSubmitError('You must be signed in to post comments.');
+      setSubmitError('Please log in to post a comment.');
       return;
     }
 
@@ -251,7 +251,7 @@ export default function DocumentDiscussion({
                 onClick={loadComments}
               >
                 <RefreshCw size={12} />
-                <span>Retry</span>
+                <span>Try Again</span>
               </button>
             )}
           </div>

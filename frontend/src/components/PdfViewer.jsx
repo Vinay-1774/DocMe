@@ -231,12 +231,12 @@ export default function PdfViewer({ documentId, fileType = 'pdf', docTitle = 'Do
             throw new Error('Please log in to preview this document.');
           }
           if (response.status === 403) {
-            throw new Error('You do not have permission to view this private document.');
+            throw new Error("You don't have permission to view this private document.");
           }
           if (response.status === 404) {
-            throw new Error('Document file was not found on the storage server.');
+            throw new Error('This document could not be found.');
           }
-          throw new Error(`Failed to load document (Status: ${response.status}).`);
+          throw new Error("Couldn't load this document. Please try again.");
         }
 
         const arrayBuffer = await response.arrayBuffer();
@@ -247,7 +247,7 @@ export default function PdfViewer({ documentId, fileType = 'pdf', docTitle = 'Do
           try {
             docxContainerRef.current.innerHTML = '';
             await renderAsync(arrayBuffer, docxContainerRef.current, undefined, {
-              className: 'docx-preview-document',
+              className: 'docx',
               inWrapper: true,
               ignoreWidth: false,
               ignoreHeight: false,
@@ -488,7 +488,7 @@ export default function PdfViewer({ documentId, fileType = 'pdf', docTitle = 'Do
               </div>
               <h3 className="pdf-state-title">Word Document (.docx)</h3>
               <p className="pdf-state-desc">
-                Inline canvas preview is tailored for PDF documents. Word document text content could not be extracted from this file. You can download this Word document to inspect it locally, or use the AI Assistant to ask questions grounded in its extracted text chunks.
+                This Word document could not be previewed directly. You can download the file to open it on your device, or ask the AI Assistant questions about its contents.
               </p>
               <button
                 type="button"

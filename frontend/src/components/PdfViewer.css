@@ -2,6 +2,7 @@
   display: flex;
   flex-direction: column;
   height: 100%;
+  min-height: 0;
   background-color: var(--bg-surface);
   border: 1px solid var(--border-subtle);
   border-radius: var(--radius-xl);
@@ -84,24 +85,30 @@
 
 .pdf-btn-download:hover {
   background-color: var(--bg-surface-hover);
-  border-color: var(--primary-emerald);
-  color: var(--primary-emerald);
+  border-color: var(--primary-brand);
+  color: var(--primary-brand);
 }
 
 /* Canvas Viewport */
 .pdf-viewport {
-  flex: 1;
-  overflow: auto;
+  flex: 1 1 0%;
+  min-height: 0;
+  height: 100%;
+  overflow-y: auto;
+  overflow-x: auto;
+  -webkit-overflow-scrolling: touch;
+  overscroll-behavior-y: contain;
   padding: 1.5rem;
   display: flex;
   justify-content: center;
   align-items: flex-start;
-  background-color: #080B0F;
-  min-height: 500px;
+  background-color: var(--bg-app);
+  scrollbar-width: thin;
+  scrollbar-color: var(--border-medium) var(--bg-surface-secondary);
 }
 
 .pdf-canvas-wrapper {
-  box-shadow: 0 8px 30px rgba(0, 0, 0, 0.6);
+  box-shadow: 0 4px 20px rgba(48, 36, 61, 0.12);
   border-radius: 4px;
   overflow: hidden;
   background-color: #FFFFFF;
@@ -130,7 +137,7 @@
   width: 36px;
   height: 36px;
   border: 3px solid var(--border-medium);
-  border-top-color: var(--primary-emerald);
+  border-top-color: var(--primary-brand);
   border-radius: var(--radius-full);
   animation: spin 0.8s linear infinite;
 }
@@ -153,14 +160,40 @@
    Clean, formatted text reading sheet adhering to DocMe's dark design tokens.
    ========================================================================== */
 
+/* Custom Dark Scrollbar for DOCX and PDF Viewports */
+.docx-reader-viewport::-webkit-scrollbar,
+.pdf-viewport::-webkit-scrollbar {
+  width: 8px;
+  height: 8px;
+}
+
+.docx-reader-viewport::-webkit-scrollbar-track,
+.pdf-viewport::-webkit-scrollbar-track {
+  background: var(--bg-surface-secondary);
+  border-radius: var(--radius-sm);
+}
+
+.docx-reader-viewport::-webkit-scrollbar-thumb,
+.pdf-viewport::-webkit-scrollbar-thumb {
+  background: var(--border-medium);
+  border-radius: var(--radius-sm);
+  border: 2px solid var(--bg-surface-secondary);
+  transition: background-color var(--transition-fast);
+}
+
+.docx-reader-viewport::-webkit-scrollbar-thumb:hover,
+.pdf-viewport::-webkit-scrollbar-thumb:hover {
+  background: var(--border-strong);
+}
+
 .docx-badge-pill {
   display: inline-flex;
   align-items: center;
   gap: 0.35rem;
   font-size: 0.75rem;
   font-weight: 600;
-  color: var(--ai-indigo);
-  background-color: var(--ai-indigo-subtle);
+  color: var(--ai-accent);
+  background-color: var(--ai-accent-surface);
   border: 1px solid var(--ai-indigo-border);
   padding: 0.25rem 0.625rem;
   border-radius: var(--radius-full);
@@ -174,15 +207,20 @@
 }
 
 .docx-reader-viewport {
-  flex: 1;
+  flex: 1 1 0%;
+  min-height: 0;
+  height: 100%;
   overflow-y: auto;
   overflow-x: hidden;
+  -webkit-overflow-scrolling: touch;
+  overscroll-behavior-y: contain;
   padding: 2rem 1.5rem;
   display: flex;
   justify-content: center;
   align-items: flex-start;
-  background-color: #080B0F;
-  min-height: 500px;
+  background-color: var(--bg-app);
+  scrollbar-width: thin;
+  scrollbar-color: var(--border-medium) var(--bg-surface-secondary);
 }
 
 .docx-reading-sheet {
@@ -192,8 +230,9 @@
   border: 1px solid var(--border-subtle);
   border-radius: var(--radius-xl);
   padding: 2.5rem 3rem;
-  box-shadow: 0 10px 30px rgba(0, 0, 0, 0.45);
+  box-shadow: 0 4px 20px rgba(48, 36, 61, 0.08);
   animation: fadeIn 0.25s ease-out forwards;
+  box-sizing: border-box;
 }
 
 .docx-sheet-header {
@@ -222,8 +261,8 @@
   letter-spacing: 0.05em;
   padding: 0.2rem 0.5rem;
   border-radius: var(--radius-sm);
-  background-color: var(--ai-indigo-subtle);
-  color: var(--ai-indigo);
+  background-color: var(--ai-accent-surface);
+  color: var(--ai-accent);
   border: 1px solid var(--ai-indigo-border);
   flex-shrink: 0;
 }
@@ -249,25 +288,13 @@
 .docx-paragraph {
   font-size: 0.9375rem;
   line-height: 1.8;
-  color: #E2E8F0;
+  color: var(--text-primary);
   margin-bottom: 1.25rem;
   word-break: break-word;
 }
 
 .docx-paragraph:last-child {
   margin-bottom: 0;
-}
-
-@media (max-width: 640px) {
-  .docx-reader-viewport {
-    padding: 1rem 0.75rem;
-  }
-  .docx-reading-sheet {
-    padding: 1.5rem 1.25rem;
-  }
-  .docx-sheet-title {
-    font-size: 1.125rem;
-  }
 }
 
 /* ==========================================================================
@@ -280,29 +307,36 @@
   display: flex;
   justify-content: center;
   align-items: flex-start;
-  min-height: 500px;
+  min-height: min-content;
 }
 
-.docx-render-target .docx-wrapper {
+.docx-render-target .docx-wrapper,
+.docx-render-target .docx-preview-document-wrapper {
   background: transparent !important;
   padding: 0 !important;
   display: flex;
   flex-direction: column;
   align-items: center;
   width: 100% !important;
+  max-width: 100% !important;
+  box-sizing: border-box !important;
+  overflow: visible !important;
 }
 
-.docx-render-target .docx-wrapper > section.docx {
-  box-shadow: 0 8px 30px rgba(0, 0, 0, 0.5) !important;
+.docx-render-target .docx-wrapper > section.docx,
+.docx-render-target .docx-preview-document-wrapper > section.docx-preview-document {
+  box-shadow: 0 4px 20px rgba(48, 36, 61, 0.12) !important;
   margin-bottom: 2rem !important;
   box-sizing: border-box !important;
   max-width: 100% !important;
   border-radius: 4px !important;
+  overflow-x: auto !important;
 }
 
 .docx-render-target table {
   max-width: 100% !important;
-  overflow-x: auto !important;
+  box-sizing: border-box !important;
+  word-break: break-word;
 }
 
 .docx-render-target img {
@@ -311,11 +345,21 @@
 }
 
 @media (max-width: 768px) {
-  .docx-render-target .docx-wrapper > section.docx {
+  .docx-reader-viewport {
+    padding: 1rem 0.5rem;
+  }
+  .docx-reading-sheet {
+    padding: 1.5rem 1rem;
+  }
+  .docx-sheet-title {
+    font-size: 1.125rem;
+  }
+  .docx-render-target .docx-wrapper > section.docx,
+  .docx-render-target .docx-preview-document-wrapper > section.docx-preview-document {
     width: 100% !important;
     min-width: 0 !important;
-    padding: 1.5rem 1rem !important;
-    margin: 0 0 1.5rem 0 !important;
+    padding: 1.25rem 0.875rem !important;
+    margin: 0 0 1rem 0 !important;
   }
 }
 

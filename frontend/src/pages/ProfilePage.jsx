@@ -449,7 +449,7 @@ export default function ProfilePage() {
                 </p>
 
                 <div className="delete-dialog-alert">
-                  <strong>Warning:</strong> This action cannot be undone. The document file and all associated AI vector embeddings will be permanently erased.
+                  <strong>Warning:</strong> This action cannot be undone. The document and its conversation history will be permanently deleted.
                 </div>
 
                 {deleteError && (

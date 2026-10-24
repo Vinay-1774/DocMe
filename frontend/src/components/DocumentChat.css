@@ -11,7 +11,7 @@
 /* Chat Header */
 .chat-header {
   padding: 0.875rem 1.25rem;
-  background-color: var(--bg-surface-secondary);
+  background-color: var(--bg-muted);
   border-bottom: 1px solid var(--border-subtle);
   display: flex;
   align-items: center;
@@ -28,12 +28,12 @@
   width: 32px;
   height: 32px;
   border-radius: var(--radius-md);
-  background: linear-gradient(135deg, var(--ai-indigo) 0%, #4F46E5 100%);
+  background: linear-gradient(135deg, var(--ai-accent) 0%, #6D28D9 100%);
   color: #FFFFFF;
   display: flex;
   align-items: center;
   justify-content: center;
-  box-shadow: 0 0 12px rgba(99, 102, 241, 0.35);
+  box-shadow: 0 2px 8px rgba(124, 58, 237, 0.25);
 }
 
 .chat-header-text {
@@ -50,7 +50,7 @@
 
 .chat-header-status {
   font-size: 0.6875rem;
-  color: var(--primary-emerald);
+  color: var(--success-green);
   display: flex;
   align-items: center;
   gap: 0.35rem;
@@ -61,8 +61,8 @@
   width: 6px;
   height: 6px;
   border-radius: var(--radius-full);
-  background-color: var(--primary-emerald);
-  box-shadow: 0 0 6px rgba(16, 185, 129, 0.8);
+  background-color: var(--success-green);
+  box-shadow: 0 0 6px rgba(21, 128, 61, 0.4);
 }
 
 .chat-header-clear {
@@ -109,12 +109,12 @@
   width: 48px;
   height: 48px;
   border-radius: var(--radius-xl);
-  background: var(--ai-indigo-subtle);
-  color: var(--ai-indigo);
+  background: var(--surface-purple-light);
+  color: var(--ai-accent);
   display: flex;
   align-items: center;
   justify-content: center;
-  border: 1px solid var(--ai-indigo-border);
+  border: 1px solid var(--border-subtle);
 }
 
 .chat-hero-title {
@@ -157,9 +157,9 @@
 }
 
 .suggested-chip:hover {
-  background-color: var(--bg-surface-elevated);
-  border-color: var(--ai-indigo);
-  color: var(--text-primary);
+  background-color: var(--surface-purple-light);
+  border-color: var(--ai-accent);
+  color: var(--primary-button-hover);
   transform: translateX(2px);
 }
 
@@ -189,12 +189,12 @@
 }
 
 .chat-msg-avatar.user-avatar {
-  background: linear-gradient(135deg, var(--primary-emerald) 0%, #059669 100%);
-  color: #0B0F14;
+  background: linear-gradient(135deg, var(--primary-brand) 0%, #6B21A8 100%);
+  color: #FFFFFF;
 }
 
 .chat-msg-avatar.ai-avatar {
-  background: linear-gradient(135deg, var(--ai-indigo) 0%, #4F46E5 100%);
+  background: linear-gradient(135deg, var(--ai-accent) 0%, #6D28D9 100%);
   color: #FFFFFF;
 }
 
@@ -207,20 +207,21 @@
 }
 
 .chat-msg-row.user .chat-bubble {
-  background-color: var(--bg-surface-elevated);
-  border: 1px solid var(--border-medium);
+  background-color: var(--surface-purple-light);
+  border: 1px solid var(--border-subtle);
   color: var(--text-primary);
   border-bottom-right-radius: var(--radius-sm);
 }
 
 .chat-msg-row.assistant .chat-bubble {
-  background-color: var(--bg-surface-secondary);
-  border: 1px solid var(--ai-indigo-border);
+  background-color: #FFFFFF;
+  border: 1px solid var(--border-subtle);
   color: var(--text-primary);
   border-bottom-left-radius: var(--radius-sm);
   display: flex;
   flex-direction: column;
   gap: 0.625rem;
+  box-shadow: 0 1px 3px rgba(48, 36, 61, 0.05);
 }
 
 /* Citations / Sources Chips */
@@ -238,7 +239,7 @@
   font-weight: 700;
   text-transform: uppercase;
   letter-spacing: 0.05em;
-  color: var(--ai-indigo);
+  color: var(--ai-accent);
 }
 
 .sources-list {
@@ -250,10 +251,10 @@
 .source-badge {
   font-size: 0.6875rem;
   padding: 0.2rem 0.5rem;
-  background-color: rgba(99, 102, 241, 0.12);
-  border: 1px solid var(--ai-indigo-border);
+  background-color: var(--surface-purple-light);
+  border: 1px solid var(--border-subtle);
   border-radius: var(--radius-sm);
-  color: #C7D2FE;
+  color: var(--primary-button-hover);
   font-family: var(--font-mono);
 }
 
@@ -317,8 +318,8 @@
 }
 
 .chat-input-box:focus-within {
-  border-color: var(--ai-indigo);
-  box-shadow: 0 0 0 2px var(--ai-indigo-subtle);
+  border-color: var(--ai-accent);
+  box-shadow: 0 0 0 2px var(--focus-ring-color);
 }
 
 /* Textarea inside unified container: no nested borders or inner focus rings */
@@ -361,7 +362,7 @@
   min-width: 32px;
   min-height: 32px;
   border-radius: var(--radius-md);
-  background-color: var(--ai-indigo);
+  background-color: var(--ai-accent);
   color: #FFFFFF;
   display: inline-flex;
   align-items: center;
@@ -376,7 +377,7 @@
 }
 
 .chat-send-btn:hover:not(:disabled) {
-  background-color: var(--ai-indigo-hover);
+  background-color: var(--primary-button-hover);
   transform: translateY(-1px);
 }
 

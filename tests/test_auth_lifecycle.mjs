@@ -90,7 +90,7 @@ console.log('  PASSED\n');
 // Test 7: CSS Palette & Dark Theme Consistency
 console.log('Test 7: CSS Palette & Dark Theme Consistency');
 assert.ok(authCss.includes('var(--bg-surface)'), 'Auth card must use surface token');
-assert.ok(authCss.includes('var(--primary-emerald)'), 'Buttons must use emerald accent');
+assert.ok(authCss.includes('var(--primary-brand)') || authCss.includes('var(--primary-emerald)'), 'Buttons must use primary brand/emerald accent');
 assert.ok(authCss.includes('.auth-password-toggle'), 'Must define password toggle button styles');
 console.log('  PASSED\n');
 
