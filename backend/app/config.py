@@ -97,10 +97,6 @@ if not JWT_ALGORITHM:
 ACCESS_TOKEN_EXPIRE_MINUTES = _parse_int("ACCESS_TOKEN_EXPIRE_MINUTES", required=True)
 REFRESH_TOKEN_EXPIRE_DAYS = _parse_int("REFRESH_TOKEN_EXPIRE_DAYS", required=True)
 
-# Cookie Security & SameSite Policy:
-# In cross-domain production (e.g. Vercel frontend talking to Render backend),
-# modern browsers require SameSite=None and Secure=True for credentialed requests.
-# For local HTTP development, SameSite=lax and Secure=False is used.
 COOKIE_SECURE = _parse_bool("COOKIE_SECURE", default=_parse_bool("RENDER", default=False))
 _raw_samesite = (os.getenv("COOKIE_SAMESITE") or "").strip().lower()
 if _raw_samesite in ("lax", "none", "strict"):
@@ -162,13 +158,6 @@ DEFAULT_ALLOWED_ORIGINS = [
 
 
 def _parse_cors_origins(key: str = "CORS_ORIGINS") -> list[str]:
-    """
-    Parse a comma-separated list of allowed CORS origins from an environment variable.
-    - Preserves baseline localhost and deployed production Vercel origins.
-    - Normalizes origins by trimming whitespace, enclosing quotes, and trailing slashes.
-    - Strips paths if mistakenly entered (e.g., 'https://docme-frontend.vercel.app/' -> 'https://docme-frontend.vercel.app').
-    - Excludes wildcard '*' because allow_credentials=True is enabled for session cookies.
-    """
     from urllib.parse import urlsplit
 
     origins: list[str] = list(DEFAULT_ALLOWED_ORIGINS)
@@ -180,7 +169,6 @@ def _parse_cors_origins(key: str = "CORS_ORIGINS") -> list[str]:
         clean = item.strip().strip("\"'").strip()
         if not clean:
             continue
-        # Wildcard '*' combined with credentials: 'include' violates the CORS specification
         if clean == "*":
             continue
         if clean.startswith(("http://", "https://")):
@@ -216,8 +204,6 @@ UPLOAD_DIR.mkdir(parents=True, exist_ok=True)
 
 
 # --- Persistent Cloud Storage Configuration (Supabase Storage) ---
-# When deployed on ephemeral hosts (Render), original document files are persisted
-# in Supabase Storage so that downloads and inline viewing persist across restarts.
 def _clean_env_str(val: Optional[str]) -> Optional[str]:
     if not val:
         return None
@@ -239,14 +225,22 @@ if not _raw_supabase_url:
     )
     if proj_ref:
         _raw_supabase_url = f"https://{proj_ref}.supabase.co"
-    elif DATABASE_URL_RAW:
+    else:
         import re
-        db_raw_str = str(DATABASE_URL_RAW)
-        ref_match = re.search(r"db\.([a-z0-9_-]+)\.supabase\.co", db_raw_str) or re.search(
-            r"postgres\.([a-z0-9_-]+):", db_raw_str
-        )
-        if ref_match:
-            _raw_supabase_url = f"https://{ref_match.group(1)}.supabase.co"
+        db_candidates = [
+            str(DATABASE_URL_RAW) if DATABASE_URL_RAW else "",
+            str(DB_HOST) if "DB_HOST" in locals() and DB_HOST else "",
+            str(DB_USER) if "DB_USER" in locals() and DB_USER else "",
+        ]
+        for candidate in db_candidates:
+            if not candidate:
+                continue
+            ref_match = re.search(r"db\.([a-zA-Z0-9_-]+)\.supabase\.co", candidate, re.IGNORECASE) or re.search(
+                r"postgres\.([a-zA-Z0-9_-]+)(?::|@|$)", candidate, re.IGNORECASE
+            )
+            if ref_match:
+                _raw_supabase_url = f"https://{ref_match.group(1)}.supabase.co"
+                break
 
 SUPABASE_URL = _raw_supabase_url.rstrip("/") if _raw_supabase_url else None
 

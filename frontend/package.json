@@ -3,8 +3,8 @@
   "private": true,
   "type": "module",
   "scripts": {
-    "build": "node ../scripts/build.js",
-    "build:prod": "node ../scripts/build.js --prod",
+    "build": "node ../scripts/build.js && npx vite build --config ../vite.config.js",
+    "build:prod": "node ../scripts/build.js --prod && npx vite build --config ../vite.config.js",
     "build:clean": "node ../scripts/build.js --clean"
   }
 }

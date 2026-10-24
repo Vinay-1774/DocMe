@@ -72,11 +72,7 @@ from .semantic_search import generate_embedding, perform_semantic_search
 
 @asynccontextmanager
 async def lifespan(app: FastAPI):
-    """
-    FastAPI lifespan context manager for application startup and shutdown.
-    Ensures required database tables and extensions are initialized once at startup.
-    Fails startup with an explicit error if the database connection or table creation fails.
-    """
+    
     logger.info("Initializing database schema on startup...")
     try:
         init_db()
@@ -106,11 +102,6 @@ async def lifespan(app: FastAPI):
 
 
 class DiagnosticCORSMiddleware(CORSMiddleware):
-    """
-    Subclass of Starlette CORSMiddleware providing safe, non-sensitive diagnostic
-    logging for rejected and accepted CORS preflight requests in production.
-    Does not expose sensitive credentials, cookies, or secrets.
-    """
     def preflight_response(self, request_headers: Headers) -> Response:
         requested_origin = request_headers.get("origin")
         requested_method = request_headers.get("access-control-request-method")
@@ -176,10 +167,6 @@ def root():
     }
 
 
-# =====================================================================
-# Authentication Endpoints
-# =====================================================================
-
 @app.post("/register", response_model=UserResponse, status_code=status.HTTP_201_CREATED)
 def register(user_data: UserCreate, db: Session = Depends(get_db)):
     """Registers a new user."""
@@ -216,7 +203,7 @@ def _set_refresh_cookie(response: Response, user_id: int) -> str:
 
 
 def is_origin_allowed(origin: Optional[str]) -> bool:
-    """Checks whether an Origin or Referer origin is permitted by project CORS configuration."""
+
     if not origin:
         return True
     clean_origin = origin.rstrip("/")
@@ -228,11 +215,7 @@ def is_origin_allowed(origin: Optional[str]) -> bool:
 
 
 def verify_csrf_origin(request: Request) -> None:
-    """
-    Validates Origin and Referer headers for cookie-authenticated mutating endpoints (/refresh, /logout).
-    Prevents cross-site request forgery when cookies are configured with SameSite=None in production.
-    Preserves legitimate browser requests from deployed Vercel and local environments.
-    """
+
     origin = request.headers.get("origin")
     if origin:
         if not is_origin_allowed(origin):
@@ -271,12 +254,6 @@ def oauth2_token(
     form_data: OAuth2PasswordRequestForm = Depends(),
     db: Session = Depends(get_db),
 ):
-    """
-    OAuth2 password login endpoint for Swagger UI and form-based clients.
-    Accepts application/x-www-form-urlencoded form fields 'username' and 'password'.
-    Interprets 'username' as the user's email address.
-    Sets HttpOnly refresh token cookie for session persistence.
-    """
     token_res = login_oauth2(form_data, db)
     user = db.scalar(select(User).where(User.email == form_data.username))
     if user:
@@ -290,10 +267,6 @@ def login(
     response: Response,
     db: Session = Depends(get_db),
 ):
-    """
-    Authenticates a user via JSON payload (email and password) and returns a JWT access token.
-    Sets HttpOnly refresh token cookie for persistent sessions without unexpected logout.
-    """
     token_res = login_user(login_data, db)
     user = db.scalar(select(User).where(User.email == login_data.email))
     if user:
@@ -307,10 +280,6 @@ def refresh_session(
     response: Response,
     db: Session = Depends(get_db),
 ):
-    """
-    Refreshes an expired short-lived access token using the persistent HttpOnly refresh token.
-    Avoids unexpected user logout when access tokens expire.
-    """
     verify_csrf_origin(request)
     token = request.cookies.get("rp_refresh_token")
     if not token:
@@ -373,10 +342,6 @@ def get_me(current_user: User = Depends(get_current_user)):
 
 
 
-# =====================================================================
-# Public Feed & Discovery Endpoints (Registered before dynamic {id} routes)
-# =====================================================================
-
 @app.get("/feed", response_model=List[DocumentResponse])
 @app.get("/documents/feed", response_model=List[DocumentResponse])
 def public_feed(db: Session = Depends(get_db)):
@@ -398,12 +363,6 @@ def search_documents(
 ):
     """
     Searches for related documents by title/description and semantic vector similarity.
-    Enforces strict access control:
-    - Public documents are searchable by anyone.
-    - An authenticated user can also search their own private documents.
-    - Private documents of other users are never returned.
-
-    Delegates directly to app/semantic-search.py without duplicating logic.
     """
     user_id = current_user.id if current_user is not None else None
     return perform_semantic_search(
@@ -475,7 +434,6 @@ def user_ranking(db: Session = Depends(get_db)):
 def get_user_profile(user_id: int, db: Session = Depends(get_db)):
     """
     Returns public profile details of a contributor by user ID.
-    Enables viewing contributor profiles from leaderboard and document cards.
     """
     user = db.scalar(select(User).where(User.id == user_id))
     if not user:
@@ -492,11 +450,6 @@ def get_contributor_documents(
     current_user: Optional[User] = Depends(get_optional_current_user),
     db: Session = Depends(get_db),
 ):
-    """
-    Retrieves documents uploaded by a specific contributor:
-    - If current_user is the owner, returns all their documents (public and private).
-    - If another user or visitor, returns only their public documents.
-    """
     user = db.scalar(select(User).where(User.id == user_id))
     if not user:
         raise HTTPException(
@@ -516,10 +469,6 @@ def get_contributor_documents(
     return db.scalars(stmt).all()
 
 
-# =====================================================================
-# Document Management Endpoints
-# =====================================================================
-
 @app.post("/documents", response_model=DocumentResponse, status_code=status.HTTP_201_CREATED)
 def upload_document(
     title: str = Form(...),
@@ -529,10 +478,6 @@ def upload_document(
     current_user: User = Depends(get_current_user),
     db: Session = Depends(get_db),
 ):
-    """
-    Uploads, stores, and ingests a document (PDF or DOCX).
-    Enforces authorization, path traversal protection, and safe rollback on error.
-    """
     if not file.filename:
         raise HTTPException(
             status_code=status.HTTP_400_BAD_REQUEST,
@@ -610,7 +555,15 @@ def upload_document(
     if storage_manager.is_production_mode() and not storage_manager.is_supabase_storage_enabled():
         if file_created and saved_file_path.is_file():
             saved_file_path.unlink(missing_ok=True)
-        logger.critical("Document upload rejected: Persistent Supabase Storage is not configured in production.")
+        effective_mode = (os.getenv("STORAGE_BACKEND") or storage_manager.backend_mode or "auto").strip().lower()
+        if effective_mode == "local":
+            logger.critical(
+                "Document upload rejected: STORAGE_BACKEND is set to 'local' in production. "
+                "Ephemeral storage is prohibited in production to prevent data loss. "
+                "Unset STORAGE_BACKEND or configure persistent cloud storage."
+            )
+        else:
+            logger.critical("Document upload rejected: Persistent Supabase Storage is not configured in production.")
         raise HTTPException(
             status_code=status.HTTP_500_INTERNAL_SERVER_ERROR,
             detail="Persistent cloud storage is not configured. Document uploads in production require persistent cloud storage to ensure durability.",
@@ -788,17 +741,6 @@ def delete_document(
     current_user: User = Depends(get_current_user),
     db: Session = Depends(get_db),
 ):
-    """
-    Deletes a document and its associated data:
-    - Requires authentication.
-    - Verifies document exists.
-    - Verifies authenticated user is the document owner.
-    - Returns 404 for nonexistent or private inaccessible documents.
-    - Prevents unauthorized deletion of other users' documents (403 for unauthorized).
-    - Cascades deletion to DocumentChunk records and pgvector embeddings.
-    - Cascades deletion to Comment records.
-    - Cleans up the uploaded file from disk storage safely.
-    """
     doc = db.scalar(select(Document).where(Document.id == document_id))
     if not doc:
         raise HTTPException(
@@ -861,12 +803,6 @@ def download_document(
     current_user: Optional[User] = Depends(get_optional_current_user),
     db: Session = Depends(get_db),
 ):
-    """
-    Downloads or renders the original document file if the user has access:
-    - Public documents can be downloaded or viewed by any user.
-    - Private documents require authentication and can only be accessed by their owner.
-    - Supports inline=True for embedded browser PDF rendering.
-    """
     doc = db.scalar(select(Document).where(Document.id == document_id))
     if not doc:
         raise HTTPException(status_code=status.HTTP_404_NOT_FOUND, detail="Document not found.")
@@ -885,10 +821,6 @@ def download_document(
 
     return storage_manager.get_file_response(doc, inline=inline)
 
-
-# =====================================================================
-# Comments Endpoints
-# =====================================================================
 
 @app.post("/documents/{document_id}/comments", response_model=CommentResponse, status_code=status.HTTP_201_CREATED)
 def create_comment(
@@ -940,10 +872,6 @@ def get_comments(
     return db.scalars(stmt).all()
 
 
-# =====================================================================
-# Document Chat Endpoint (LangGraph RAG Workflow)
-# =====================================================================
-
 @app.post("/documents/{document_id}/chat", response_model=None)
 def document_chat(
     document_id: int,
@@ -952,13 +880,6 @@ def document_chat(
     current_user: User = Depends(get_current_user),
     db: Session = Depends(get_db),
 ):
-    """
-    Executes conversational question-answering over a document using LangGraph.
-    Enforces server-side authorization: user can only chat with public documents
-    or their own private documents.
-
-    Supports Server-Sent Events (SSE) streaming when stream=true (query param or body).
-    """
     doc = db.scalar(select(Document).where(Document.id == document_id))
     if not doc:
         raise HTTPException(status_code=status.HTTP_404_NOT_FOUND, detail="Document not found.")

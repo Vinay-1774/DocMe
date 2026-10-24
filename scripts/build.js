@@ -162,6 +162,13 @@ function main() {
   updateEnvJs(validatedUrl);
   updateHtmlFiles(validatedUrl);
 
+  const distDir = path.join(projectRoot, 'dist');
+  if (fs.existsSync(distDir)) {
+    const distSharedDir = path.join(distDir, 'shared');
+    fs.mkdirSync(distSharedDir, { recursive: true });
+    fs.copyFileSync(envJsPath, path.join(distSharedDir, 'env.js'));
+  }
+
   console.log(`✓ Updated ${path.relative(projectRoot, envJsPath)}`);
   for (const file of htmlFiles) {
     console.log(`✓ Updated ${path.relative(projectRoot, file)}`);

@@ -10,7 +10,6 @@ from sqlalchemy.orm import Session
 
 from .config import CHUNK_OVERLAP, CHUNK_SIZE, GEMINI_API_KEY, GEMINI_EMBEDDING_MODEL
 
-# Safe imports for extraction and embedding providers
 try:
     from pypdf import PdfReader
 except ImportError:
@@ -26,15 +25,13 @@ try:
 except ImportError:
     genai = None
 
-# Database models
 from .models import DocumentChunk
 
 
-SUPPORTED_EXTENSIONS = {".pdf", ".docx"}
+SUPPORTED_EXTENSIONS = {".pdf", ".docx",".jpg",".jpeg",".png"}
 
 
 def compute_file_hash(file_path: str) -> str:
-    """Computes SHA-256 hash of a file."""
     sha256 = hashlib.sha256()
     with open(file_path, "rb") as f:
         while chunk := f.read(8192):
@@ -43,10 +40,6 @@ def compute_file_hash(file_path: str) -> str:
 
 
 def extract_text_and_metadata(file_path: str) -> List[dict[str, Any]]:
-    """
-    Extracts text and page metadata from supported document files (PDF and DOCX).
-    Returns a list of dicts with 'text' and optional 'page_number'.
-    """
     if not os.path.isfile(file_path):
         raise FileNotFoundError(f"File not found: {file_path}")
 
@@ -93,7 +86,6 @@ def chunk_text(
     chunk_size: int = CHUNK_SIZE,
     chunk_overlap: int = CHUNK_OVERLAP,
 ) -> List[str]:
-    """Splits text into overlapping chunks using configurable chunk size and overlap."""
     if not text or not text.strip():
         return []
     if chunk_size <= chunk_overlap:
@@ -158,7 +150,6 @@ def generate_embedding(text: str) -> List[float]:
 
 
 def generate_embeddings(texts: List[str]) -> List[List[float]]:
-    """Generates embeddings for a batch of text chunks."""
     if not GEMINI_API_KEY:
         raise ValueError("GEMINI_API_KEY is not configured in environment or .env.")
 
@@ -215,7 +206,6 @@ def store_chunks(
     user_id: int,
     db: Session,
 ) -> int:
-    """Stores document chunks and embeddings in PostgreSQL associated with document_id and user_id."""
     try:
         for item in chunks:
             chunk_obj = DocumentChunk(
@@ -243,15 +233,6 @@ def ingest_document(
     chunk_size: int = CHUNK_SIZE,
     chunk_overlap: int = CHUNK_OVERLAP,
 ) -> dict[str, Any]:
-    """
-    Ingests an uploaded document into the platform:
-    1. Validates file existence and extension (PDF or DOCX).
-    2. Verifies whether chunks for this document_id already exist in the database.
-    3. Extracts text and page metadata.
-    4. Chunks text with configurable size and overlap.
-    5. Generates vector embeddings for each chunk.
-    6. Stores chunks and embeddings in PostgreSQL associated with document_id and user_id.
-    """
     if not os.path.isfile(file_path):
         raise FileNotFoundError(f"File not found: {file_path}")
 

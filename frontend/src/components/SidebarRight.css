@@ -1,0 +1,201 @@
+.sidebar-right {
+  width: 320px;
+  flex-shrink: 0;
+  display: flex;
+  flex-direction: column;
+  gap: 1.5rem;
+  padding: 1.5rem 0.75rem;
+}
+
+.discovery-widget {
+  background-color: var(--bg-surface);
+  border: 1px solid var(--border-subtle);
+  border-radius: var(--radius-lg);
+  padding: 1rem;
+  display: flex;
+  flex-direction: column;
+  gap: 0.875rem;
+}
+
+.widget-header {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+}
+
+.widget-title-group {
+  display: flex;
+  align-items: center;
+  gap: 0.5rem;
+  font-size: 0.8125rem;
+  font-weight: 700;
+  letter-spacing: 0.04em;
+  text-transform: uppercase;
+  color: var(--text-primary);
+}
+
+.widget-icon-emerald {
+  color: var(--primary-emerald);
+}
+
+.widget-icon-amber {
+  color: var(--highlight-amber);
+}
+
+.widget-icon-indigo {
+  color: var(--ai-indigo);
+}
+
+/* Popular Documents List */
+.popular-doc-item {
+  display: flex;
+  flex-direction: column;
+  gap: 0.25rem;
+  padding: 0.625rem 0.75rem;
+  border-radius: var(--radius-md);
+  background-color: var(--bg-surface-secondary);
+  border: 1px solid transparent;
+  transition: all var(--transition-fast);
+  text-decoration: none;
+}
+
+.popular-doc-item:hover {
+  background-color: var(--bg-surface-elevated);
+  border-color: var(--border-medium);
+  transform: translateY(-1px);
+}
+
+.popular-doc-title {
+  font-size: 0.8125rem;
+  font-weight: 600;
+  color: var(--text-primary);
+  line-height: 1.35;
+  display: -webkit-box;
+  -webkit-line-clamp: 2;
+  -webkit-box-orient: vertical;
+  overflow: hidden;
+}
+
+.popular-doc-meta {
+  display: flex;
+  align-items: center;
+  gap: 0.75rem;
+  font-size: 0.75rem;
+  color: var(--text-muted);
+}
+
+.comment-badge {
+  display: inline-flex;
+  align-items: center;
+  gap: 0.25rem;
+  color: var(--highlight-amber);
+  font-weight: 500;
+}
+
+/* Contributor Ranking */
+.ranking-item {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  padding: 0.5rem 0.5rem;
+  border-radius: var(--radius-md);
+  text-decoration: none;
+  transition: all var(--transition-fast);
+}
+
+.ranking-item:hover {
+  background-color: var(--bg-surface-secondary);
+}
+
+.ranking-user-info {
+  display: flex;
+  align-items: center;
+  gap: 0.625rem;
+}
+
+.ranking-rank-num {
+  font-size: 0.75rem;
+  font-weight: 700;
+  color: var(--text-muted);
+  width: 16px;
+  text-align: center;
+}
+
+.ranking-rank-num.top {
+  color: var(--primary-emerald);
+}
+
+.ranking-avatar {
+  width: 28px;
+  height: 28px;
+  border-radius: var(--radius-full);
+  background: linear-gradient(135deg, var(--bg-surface-elevated), var(--bg-surface-hover));
+  border: 1px solid var(--border-medium);
+  color: var(--text-primary);
+  font-size: 0.75rem;
+  font-weight: 600;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+}
+
+.ranking-username {
+  font-size: 0.8125rem;
+  font-weight: 600;
+  color: var(--text-primary);
+}
+
+.ranking-doc-count {
+  font-size: 0.75rem;
+  color: var(--text-muted);
+  font-weight: 500;
+  background-color: var(--bg-surface-secondary);
+  padding: 0.2rem 0.5rem;
+  border-radius: var(--radius-full);
+  border: 1px solid var(--border-subtle);
+}
+
+/* AI Assistant Callout */
+.ai-assistant-widget {
+  background: linear-gradient(145deg, rgba(99, 102, 241, 0.08) 0%, rgba(21, 27, 35, 0.95) 100%);
+  border: 1px solid var(--ai-indigo-border);
+  border-radius: var(--radius-lg);
+  padding: 1rem;
+  display: flex;
+  flex-direction: column;
+  gap: 0.625rem;
+}
+
+.ai-assistant-widget p {
+  font-size: 0.8125rem;
+  color: var(--text-secondary);
+  line-height: 1.45;
+}
+
+/* Skeletons */
+.widget-skeleton {
+  height: 48px;
+  background-color: var(--bg-surface-secondary);
+  border-radius: var(--radius-md);
+  animation: pulseSubtle 1.5s infinite;
+}
+
+.widget-empty-text {
+  font-size: 0.8125rem;
+  color: var(--text-muted);
+  text-align: center;
+  padding: 0.75rem 0;
+}
+
+/* Responsive */
+@media (max-width: 1200px) {
+  .sidebar-right {
+    width: 280px;
+  }
+}
+
+@media (max-width: 1024px) {
+  .sidebar-right {
+    display: none;
+  }
+}

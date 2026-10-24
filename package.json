@@ -4,9 +4,22 @@
   "private": true,
   "type": "module",
   "scripts": {
-    "build": "node scripts/build.js",
-    "build:prod": "node scripts/build.js --prod",
+    "dev": "vite",
+    "build": "node scripts/build.js && vite build",
+    "build:vite": "vite build",
+    "build:prod": "node scripts/build.js --prod && vite build",
     "build:clean": "node scripts/build.js --clean",
-    "test:frontend": "node tests/test_frontend_auth.mjs && node tests/test_backend_url_config.mjs && node tests/test_document_deletion_frontend.mjs && node tests/test_typing_indicator.mjs && node tests/test_profile_upload.mjs && node tests/test_frontend_otp.mjs && node tests/test_responsiveness.mjs"
+    "test:frontend": "node tests/test_frontend_auth.mjs && node tests/test_backend_url_config.mjs && node tests/test_document_deletion_frontend.mjs && node tests/test_typing_indicator.mjs && node tests/test_profile_upload.mjs && node tests/test_frontend_otp.mjs && node tests/test_responsiveness.mjs && node tests/test_explore_page.mjs && node tests/test_publish_workflow.mjs && node tests/test_document_discussion.mjs && node tests/test_auth_lifecycle.mjs && node tests/test_e2e_release_readiness.mjs"
+  },
+  "devDependencies": {
+    "@vitejs/plugin-react": "^4.7.0",
+    "vite": "^6.4.5"
+  },
+  "dependencies": {
+    "lucide-react": "^1.61.0",
+    "pdfjs-dist": "^5.4.624",
+    "react": "^19.3.1",
+    "react-dom": "^19.3.1",
+    "react-router-dom": "^7.18.4"
   }
 }

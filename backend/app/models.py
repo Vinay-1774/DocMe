@@ -10,9 +10,6 @@ from .database import Base
 
 
 class User(Base):
-    """
-    Represents a registered user in the research platform.
-    """
     __tablename__ = "users"
 
     id: Mapped[int] = mapped_column(primary_key=True)

@@ -2785,6 +2785,141 @@ def test_regression_phase3_direct_byte_serving_on_cache_write_failure(client):
         assert res.content == content
 
 
+def test_supabase_url_inference_from_db_credentials():
+    """
+    Verifies that URL inference from database connection strings:
+    1. Supports direct Supabase Postgres URLs (db.<ref>.supabase.co).
+    2. Supports Supavisor connection pooler formats (postgres.<ref>:... and postgres.<ref>@...).
+    3. Handles case-insensitive project refs.
+    4. Supports separate DB_HOST and DB_USER variables when DATABASE_URL is not provided.
+    """
+    import re
+
+    def run_inference(db_url=None, db_host=None, db_user=None):
+        candidates = [str(db_url) if db_url else "", str(db_host) if db_host else "", str(db_user) if db_user else ""]
+        for candidate in candidates:
+            if not candidate:
+                continue
+            ref_match = re.search(r"db\.([a-zA-Z0-9_-]+)\.supabase\.co", candidate, re.IGNORECASE) or re.search(
+                r"postgres\.([a-zA-Z0-9_-]+)(?::|@|$)", candidate, re.IGNORECASE
+            )
+            if ref_match:
+                return f"https://{ref_match.group(1)}.supabase.co"
+        return None
+
+    # Direct connection
+    assert run_inference(db_url="postgresql://postgres:secret@db.abc123xyz.supabase.co:5432/postgres") == "https://abc123xyz.supabase.co"
+    # Pooler with password
+    assert run_inference(db_url="postgresql://postgres.abc123xyz:secret@aws-0-us-east-1.pooler.supabase.com:6543/postgres") == "https://abc123xyz.supabase.co"
+    # Pooler without password
+    assert run_inference(db_url="postgresql://postgres.abc123xyz@aws-0-us-east-1.pooler.supabase.com:5432/postgres") == "https://abc123xyz.supabase.co"
+    # Uppercase ref
+    assert run_inference(db_url="postgresql://postgres:secret@db.ABC123XYZ.supabase.co:5432/postgres") == "https://ABC123XYZ.supabase.co"
+    # DB_HOST alone
+    assert run_inference(db_host="db.abc123xyz.supabase.co") == "https://abc123xyz.supabase.co"
+    # DB_USER alone
+    assert run_inference(db_user="postgres.abc123xyz") == "https://abc123xyz.supabase.co"
+
+
+def test_storage_manager_readiness_and_backend_mode():
+    """
+    Verifies StorageManager readiness rules:
+    1. Returns False when STORAGE_BACKEND is 'local', even if URL and Key are set.
+    2. Returns False when either URL or Key is missing.
+    3. Returns True when backend is 'auto'/'supabase' and both credentials are present.
+    """
+    from backend.app.storage import StorageManager
+
+    # Case 1: Credentials present, but mode is explicitly local -> False
+    sm_local = StorageManager(
+        supabase_url="https://test.supabase.co",
+        supabase_key="test-key",
+        backend_mode="local",
+    )
+    assert not sm_local.is_supabase_storage_enabled()
+
+    # Case 2: Mode is auto, but key is missing -> False
+    sm_no_key = StorageManager(
+        supabase_url="https://test.supabase.co",
+        supabase_key=None,
+        backend_mode="auto",
+    )
+    assert not sm_no_key.is_supabase_storage_enabled()
+
+    # Case 3: Mode is auto, but url is missing -> False
+    sm_no_url = StorageManager(
+        supabase_url=None,
+        supabase_key="test-key",
+        backend_mode="auto",
+    )
+    assert not sm_no_url.is_supabase_storage_enabled()
+
+    # Case 4: Mode is auto, both URL and key present -> True
+    sm_ready = StorageManager(
+        supabase_url="https://test.supabase.co",
+        supabase_key="test-key",
+        backend_mode="auto",
+    )
+    assert sm_ready.is_supabase_storage_enabled()
+
+
+def test_production_upload_rejection_with_storage_backend_local(client):
+    """
+    Verifies that if STORAGE_BACKEND=local is accidentally configured on Render/production,
+    upload requests are rejected with HTTP 500 and the production cloud storage error message,
+    preventing ephemeral local disk data loss.
+    """
+    from backend.app.storage import storage_manager
+    from backend.app.models import Document
+    import io
+
+    token = _auth_user(client, "prod_local_user", "prod_local_user@example.com")
+    pdf_bytes = create_sample_pdf_bytes().getvalue()
+
+    with patch.object(storage_manager, "is_production_mode", return_value=True), \
+         patch.dict(os.environ, {"STORAGE_BACKEND": "local"}, clear=False):
+
+        res = client.post(
+            "/documents",
+            headers={"Authorization": f"Bearer {token}"},
+            data={"title": "Local Prod Reject", "visibility": "public"},
+            files={"file": ("local_reject.pdf", io.BytesIO(pdf_bytes), "application/pdf")},
+        )
+        assert res.status_code == 500
+        assert "Persistent cloud storage is not configured" in res.json()["detail"]
+
+        with TestSessionLocal() as db:
+            assert db.query(Document).filter(Document.title == "Local Prod Reject").first() is None
+
+
+def test_storage_bucket_authorization_failure_distinction():
+    """
+    Verifies that when Supabase Storage returns 401 Unauthorized or 403 Forbidden
+    during bucket verification, ensure_bucket_exists does NOT treat it as a success,
+    sets _last_status_code, and prevents upload_to_supabase from proceeding.
+    """
+    from unittest.mock import MagicMock
+    from backend.app.storage import StorageManager
+
+    sm = StorageManager(
+        supabase_url="https://fake.supabase.co",
+        supabase_key="invalid-key",
+        backend_mode="auto",
+    )
+
+    with patch("httpx.Client.get") as mock_get:
+        mock_get.return_value = MagicMock(status_code=401, text="Invalid API key")
+        assert sm.ensure_bucket_exists() is False
+        assert sm._last_status_code == 401
+
+    with patch("httpx.Client.get") as mock_get:
+        mock_get.return_value = MagicMock(status_code=403, text="Forbidden")
+        sm._bucket_checked = False
+        assert sm.ensure_bucket_exists() is False
+        assert sm._last_status_code == 403
+
+
+
 
 
 

@@ -20,16 +20,6 @@ def retrieve_documents(
     db: Optional[Session] = None,
     limit: int = RETRIEVAL_LIMIT,
 ) -> dict[str, Any]:
-    """
-    Retrieves the most relevant document chunks for a question using pgvector similarity search,
-    enforcing database-level access control:
-    - Users can access chunks from their own private documents.
-    - Any user can access chunks from public documents.
-    - Unauthorized documents are strictly excluded.
-    
-    Returns a dictionary formatted for nodes.py:
-        {"documents": List[str], "sources": List[dict]}
-    """
     if not question or not question.strip():
         return {"documents": [], "sources": []}
 

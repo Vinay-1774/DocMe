@@ -1,0 +1,77 @@
+/**
+ * DocMe Design System Tokens
+ * Strict adherence to visual requirements:
+ * - Background: #0B0F14
+ * - Card surfaces: #151B23
+ * - Secondary surfaces: #1C2430
+ * - Primary emerald: #10B981
+ * - Secondary AI accent: #6366F1
+ * - Highlight color: #F59E0B
+ * - Primary text: #F8FAFC
+ * - Secondary text: #9CA3AF
+ * - Borders: subtle dark-grey with contrast (#222B38 / #2D3748)
+ */
+
+:root {
+  /* Brand Palettes */
+  --bg-app: #0B0F14;
+  --bg-surface: #151B23;
+  --bg-surface-secondary: #1C2430;
+  --bg-surface-elevated: #212B3B;
+  --bg-surface-hover: #263345;
+
+  /* Primary Emerald */
+  --primary-emerald: #10B981;
+  --primary-emerald-hover: #059669;
+  --primary-emerald-subtle: rgba(16, 185, 129, 0.12);
+  --primary-emerald-border: rgba(16, 185, 129, 0.3);
+
+  /* Secondary AI Accent */
+  --ai-indigo: #6366F1;
+  --ai-indigo-hover: #4F46E5;
+  --ai-indigo-subtle: rgba(99, 102, 241, 0.14);
+  --ai-indigo-border: rgba(99, 102, 241, 0.3);
+
+  /* Highlight Amber */
+  --highlight-amber: #F59E0B;
+  --highlight-amber-subtle: rgba(245, 158, 11, 0.12);
+  --highlight-amber-border: rgba(245, 158, 11, 0.3);
+
+  /* Danger / Destructive */
+  --danger-red: #EF4444;
+  --danger-red-hover: #DC2626;
+  --danger-red-subtle: rgba(239, 68, 68, 0.12);
+
+  /* Typography Colors */
+  --text-primary: #F8FAFC;
+  --text-secondary: #9CA3AF;
+  --text-muted: #64748B;
+  --text-inverse: #0B0F14;
+
+  /* Borders & Dividers */
+  --border-subtle: #222B38;
+  --border-medium: #2E3A4D;
+  --border-focus: #10B981;
+
+  /* Elevations & Shadows */
+  --shadow-sm: 0 1px 2px 0 rgba(0, 0, 0, 0.35);
+  --shadow-md: 0 4px 6px -1px rgba(0, 0, 0, 0.4), 0 2px 4px -2px rgba(0, 0, 0, 0.3);
+  --shadow-lg: 0 10px 15px -3px rgba(0, 0, 0, 0.5), 0 4px 6px -4px rgba(0, 0, 0, 0.4);
+  --shadow-emerald: 0 0 16px rgba(16, 185, 129, 0.18);
+  --shadow-indigo: 0 0 16px rgba(99, 102, 241, 0.22);
+
+  /* Radii */
+  --radius-sm: 6px;
+  --radius-md: 10px;
+  --radius-lg: 14px;
+  --radius-xl: 20px;
+  --radius-full: 9999px;
+
+  /* Transitions */
+  --transition-fast: 150ms cubic-bezier(0.4, 0, 0.2, 1);
+  --transition-normal: 250ms cubic-bezier(0.4, 0, 0.2, 1);
+
+  /* Typography */
+  --font-sans: -apple-system, BlinkMacSystemFont, "Inter", "Segoe UI", Roboto, Helvetica, Arial, sans-serif;
+  --font-mono: ui-monospace, SFMono-Regular, Menlo, Monaco, Consolas, "Liberation Mono", monospace;
+}

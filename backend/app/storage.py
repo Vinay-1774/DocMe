@@ -52,18 +52,36 @@ class StorageManager:
         self._last_error: Optional[str] = None
         self.upload_dir.mkdir(parents=True, exist_ok=True)
 
-    def is_supabase_storage_enabled(self) -> bool:
-        """Returns True if Supabase Storage credentials are configured and not explicitly disabled."""
-        if self.backend_mode == "local":
-            return False
-        url = self.supabase_url or os.getenv("SUPABASE_URL")
+    def get_supabase_credentials(self) -> tuple[Optional[str], Optional[str]]:
+        """
+        Resolves Supabase URL and API key from instance attributes or environment variables.
+        Supports SUPABASE_URL, SUPABASE_PROJECT_ID, and various key aliases including service role and anon keys.
+        """
+        url = (
+            self.supabase_url
+            or os.getenv("SUPABASE_URL")
+            or (f"https://{os.getenv('SUPABASE_PROJECT_ID')}.supabase.co" if os.getenv("SUPABASE_PROJECT_ID") else None)
+            or (f"https://{os.getenv('SUPABASE_REF')}.supabase.co" if os.getenv("SUPABASE_REF") else None)
+            or (f"https://{os.getenv('SUPABASE_PROJECT_REF')}.supabase.co" if os.getenv("SUPABASE_PROJECT_REF") else None)
+        )
+        if url:
+            url = url.rstrip("/")
         key = (
             self.supabase_key
             or os.getenv("SUPABASE_SERVICE_ROLE_KEY")
             or os.getenv("SUPABASE_SERVICE_KEY")
             or os.getenv("SUPABASE_KEY")
             or os.getenv("SUPABASE_SECRET_KEY")
+            or os.getenv("SUPABASE_ANON_KEY")
         )
+        return url, key
+
+    def is_supabase_storage_enabled(self) -> bool:
+        """Returns True if Supabase Storage credentials are configured and not explicitly disabled."""
+        mode = (os.getenv("STORAGE_BACKEND") or self.backend_mode or "auto").strip().lower()
+        if mode == "local":
+            return False
+        url, key = self.get_supabase_credentials()
         return bool(url and key)
 
     def is_production_mode(self) -> bool:
@@ -71,7 +89,8 @@ class StorageManager:
         Determines whether the application is running in a production or ephemeral environment
         (e.g., Render, Kubernetes, or explicit ENVIRONMENT=production).
         """
-        if self.backend_mode == "supabase":
+        mode = (os.getenv("STORAGE_BACKEND") or self.backend_mode or "auto").strip().lower()
+        if mode == "supabase":
             return True
         env = (os.getenv("ENVIRONMENT") or "").strip().lower()
         if env == "production":
@@ -98,20 +117,17 @@ class StorageManager:
         """
         Verifies the Supabase storage bucket exists.
         If missing, creates it with private-by-default access (public=False).
+        Distinguishes authorization errors (401/403) from missing bucket (404).
         """
         if not self.is_supabase_storage_enabled():
             return False
         if self._bucket_checked:
             return True
 
-        key = (
-            self.supabase_key
-            or os.getenv("SUPABASE_SERVICE_ROLE_KEY")
-            or os.getenv("SUPABASE_SERVICE_KEY")
-            or os.getenv("SUPABASE_KEY")
-            or os.getenv("SUPABASE_SECRET_KEY")
-        )
-        url = (self.supabase_url or os.getenv("SUPABASE_URL", "")).rstrip("/")
+        url, key = self.get_supabase_credentials()
+        if not url or not key:
+            return False
+
         headers = {
             "Authorization": f"Bearer {key}",
             "apikey": key,
@@ -125,6 +141,17 @@ class StorageManager:
                     self._bucket_checked = True
                     return True
 
+                if res.status_code in (401, 403):
+                    self._last_status_code = res.status_code
+                    self._last_error = res.text
+                    logger.critical(
+                        "Supabase Storage permission failure verifying bucket '%s': HTTP %s: %s",
+                        self.bucket_name,
+                        res.status_code,
+                        res.text,
+                    )
+                    return False
+
                 if res.status_code in (404, 400) and ("not found" in res.text.lower() or res.status_code == 404):
                     create_url = f"{url}/storage/v1/bucket"
                     create_res = client.post(
@@ -136,13 +163,17 @@ class StorageManager:
                         self._bucket_checked = True
                         logger.info("Created private Supabase Storage bucket '%s'.", self.bucket_name)
                         return True
+                    self._last_status_code = create_res.status_code
+                    self._last_error = create_res.text
                     logger.error("Failed to create Supabase bucket '%s': %s", self.bucket_name, create_res.text)
                     return False
 
-                # If status is not 404/400, assume bucket exists or will be verified on operation
+                # If status is not 404/400/401/403, assume bucket exists or will be verified on operation
                 self._bucket_checked = True
                 return True
         except Exception as e:
+            self._last_status_code = 500
+            self._last_error = str(e)
             logger.warning("Could not verify Supabase bucket '%s': %s", self.bucket_name, e)
             return False
 
@@ -156,15 +187,14 @@ class StorageManager:
             logger.error("Cannot upload to Supabase Storage: invalid or empty storage key.")
             return False
 
-        self.ensure_bucket_exists()
-        key = (
-            self.supabase_key
-            or os.getenv("SUPABASE_SERVICE_ROLE_KEY")
-            or os.getenv("SUPABASE_SERVICE_KEY")
-            or os.getenv("SUPABASE_KEY")
-            or os.getenv("SUPABASE_SECRET_KEY")
-        )
-        url = (self.supabase_url or os.getenv("SUPABASE_URL", "")).rstrip("/")
+        if not self.ensure_bucket_exists():
+            logger.error("Cannot upload to Supabase Storage: bucket verification/creation failed for '%s'.", self.bucket_name)
+            return False
+
+        url, key = self.get_supabase_credentials()
+        if not url or not key:
+            return False
+
         obj_url = f"{url}/storage/v1/object/{self.bucket_name}/{clean_key}"
         headers = {
             "Authorization": f"Bearer {key}",
@@ -219,14 +249,9 @@ class StorageManager:
         if not clean_key:
             return None
 
-        key = (
-            self.supabase_key
-            or os.getenv("SUPABASE_SERVICE_ROLE_KEY")
-            or os.getenv("SUPABASE_SERVICE_KEY")
-            or os.getenv("SUPABASE_KEY")
-            or os.getenv("SUPABASE_SECRET_KEY")
-        )
-        url = (self.supabase_url or os.getenv("SUPABASE_URL", "")).rstrip("/")
+        url, key = self.get_supabase_credentials()
+        if not url or not key:
+            return None
         headers = {
             "Authorization": f"Bearer {key}",
             "apikey": key,
@@ -298,14 +323,9 @@ class StorageManager:
         if not clean_key:
             return False
 
-        key = (
-            self.supabase_key
-            or os.getenv("SUPABASE_SERVICE_ROLE_KEY")
-            or os.getenv("SUPABASE_SERVICE_KEY")
-            or os.getenv("SUPABASE_KEY")
-            or os.getenv("SUPABASE_SECRET_KEY")
-        )
-        url = (self.supabase_url or os.getenv("SUPABASE_URL", "")).rstrip("/")
+        url, key = self.get_supabase_credentials()
+        if not url or not key:
+            return False
         del_url = f"{url}/storage/v1/object/{self.bucket_name}"
         headers = {
             "Authorization": f"Bearer {key}",
@@ -333,14 +353,9 @@ class StorageManager:
         if not clean_key:
             return None
 
-        key = (
-            self.supabase_key
-            or os.getenv("SUPABASE_SERVICE_ROLE_KEY")
-            or os.getenv("SUPABASE_SERVICE_KEY")
-            or os.getenv("SUPABASE_KEY")
-            or os.getenv("SUPABASE_SECRET_KEY")
-        )
-        url = (self.supabase_url or os.getenv("SUPABASE_URL", "")).rstrip("/")
+        url, key = self.get_supabase_credentials()
+        if not url or not key:
+            return None
         sign_url = f"{url}/storage/v1/object/sign/{self.bucket_name}/{clean_key}"
         headers = {
             "Authorization": f"Bearer {key}",

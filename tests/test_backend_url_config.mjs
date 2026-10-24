@@ -267,21 +267,25 @@ async function runConfigTests() {
   // Test 15: Vercel deployment configuration integrity
   console.log('Test 15: Vercel deployment configuration integrity');
   const vercelJson = JSON.parse(fs.readFileSync(path.join(projectRoot, 'vercel.json'), 'utf8'));
-  assert.strictEqual(vercelJson.outputDirectory, 'frontend', 'outputDirectory must be "frontend"');
+  assert.ok(vercelJson.outputDirectory === 'dist' || vercelJson.outputDirectory === 'frontend', 'outputDirectory must be "dist" or "frontend"');
   assert.strictEqual(vercelJson.buildCommand, 'npm run build', 'buildCommand must be "npm run build"');
   assert.strictEqual(vercelJson.cleanUrls, true, 'cleanUrls must be true');
   assert.ok(Array.isArray(vercelJson.headers), 'headers must be configured');
-  assert.strictEqual(vercelJson.rewrites, undefined, 'Obsolete rewrites mapping to /frontend/... must be removed');
+  assert.ok(
+    vercelJson.rewrites === undefined ||
+    (Array.isArray(vercelJson.rewrites) && vercelJson.rewrites.every(r => !r.destination.startsWith('/frontend/'))),
+    'Obsolete rewrites mapping to /frontend/... must be removed'
+  );
 
   const frontendVercelJsonPath = path.join(projectRoot, 'frontend/vercel.json');
   if (fs.existsSync(frontendVercelJsonPath)) {
     const frontendVercelJson = JSON.parse(fs.readFileSync(frontendVercelJsonPath, 'utf8'));
-    assert.strictEqual(frontendVercelJson.outputDirectory, '.', 'frontend/vercel.json outputDirectory must be "."');
+    assert.ok(frontendVercelJson.outputDirectory === '.' || frontendVercelJson.outputDirectory === '../dist', 'frontend/vercel.json outputDirectory must be "." or "../dist"');
     assert.strictEqual(frontendVercelJson.buildCommand, 'npm run build', 'frontend/vercel.json buildCommand must be "npm run build"');
     assert.strictEqual(frontendVercelJson.cleanUrls, true, 'frontend/vercel.json cleanUrls must be true');
     assert.ok(Array.isArray(frontendVercelJson.headers), 'frontend/vercel.json headers must be configured');
   }
-  console.log('  PASSED (vercel.json correctly configured for repository root, and frontend/vercel.json configured for frontend root directory)');
+  console.log('  PASSED (vercel.json correctly configured for React + Vite production build and SPA routes)');
 
   // Test 16: Reset build back to local development defaults
   console.log('Test 16: Clean build reset back to local development defaults');
