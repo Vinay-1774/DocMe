@@ -12,6 +12,7 @@ import {
 } from 'lucide-react';
 import * as pdfjsLib from 'pdfjs-dist';
 import pdfjsWorker from 'pdfjs-dist/build/pdf.worker.mjs?url';
+import { renderAsync } from 'docx-preview';
 import { api, API_BASE_URL } from '../services/api.js';
 import { getToken } from '../services/auth.js';
 import './PdfViewer.css';
@@ -85,6 +86,7 @@ async function extractDocxParagraphs(arrayBuffer) {
         pText += tMatch[1];
       }
       pText = pText
+        .replace(/<[^>]+>/g, '')
         .replace(/&amp;/g, '&')
         .replace(/&lt;/g, '<')
         .replace(/&gt;/g, '>')
@@ -118,8 +120,10 @@ export default function PdfViewer({ documentId, fileType = 'pdf', docTitle = 'Do
 
   // DOCX State
   const [docxParagraphs, setDocxParagraphs] = useState(null);
+  const [docxRendered, setDocxRendered] = useState(false);
   const [docxLoading, setDocxLoading] = useState(!isPdf && isDocx);
   const [docxError, setDocxError] = useState(null);
+  const docxContainerRef = useRef(null);
 
   const canvasRef = useRef(null);
   const renderTaskRef = useRef(null);
@@ -238,6 +242,28 @@ export default function PdfViewer({ documentId, fileType = 'pdf', docTitle = 'Do
         const arrayBuffer = await response.arrayBuffer();
         if (!isMounted) return;
 
+        // 1. Attempt high-fidelity rendering via docx-preview
+        if (docxContainerRef.current) {
+          try {
+            docxContainerRef.current.innerHTML = '';
+            await renderAsync(arrayBuffer, docxContainerRef.current, undefined, {
+              className: 'docx-preview-document',
+              inWrapper: true,
+              ignoreWidth: false,
+              ignoreHeight: false,
+              breakPages: true,
+              renderHeaders: true,
+              renderFooters: true,
+              renderFootnotes: true,
+              renderEndnotes: true,
+            });
+            if (isMounted) setDocxRendered(true);
+          } catch (renderErr) {
+            console.warn('docx-preview rendering issue; falling back to extracted structure:', renderErr);
+          }
+        }
+
+        // 2. Extract clean paragraphs as structure fallback
         const paragraphs = await extractDocxParagraphs(arrayBuffer);
         if (isMounted) {
           if (paragraphs && paragraphs.length > 0) {
@@ -345,48 +371,84 @@ export default function PdfViewer({ documentId, fileType = 'pdf', docTitle = 'Do
 
   // DOCX / Non-PDF Viewport Handling
   if (!isPdf) {
-    if (docxLoading) {
-      return (
-        <div className="pdf-viewer-container">
-          <div className="pdf-loading-state">
-            <div className="pdf-spinner" />
-            <p className="pdf-state-desc">Loading Word document preview...</p>
+    return (
+      <div className="pdf-viewer-container">
+        {/* Top Toolbar for DOCX */}
+        <div className="pdf-toolbar">
+          <div className="pdf-toolbar-group">
+            <span className="docx-badge-pill">
+              <FileText size={14} />
+              <span>Word Document (.docx)</span>
+            </span>
+            <span className="docx-count-badge">
+              {docxRendered
+                ? 'Formatted Document Preview'
+                : docxParagraphs?.length
+                  ? `${docxParagraphs.length} ${docxParagraphs.length === 1 ? 'paragraph' : 'paragraphs'}`
+                  : 'Document Reader'}
+            </span>
+          </div>
+
+          <div className="pdf-toolbar-group">
+            <button
+              type="button"
+              className="pdf-btn-download"
+              onClick={handleDownload}
+              aria-label="Download Document"
+              title="Download Word Document"
+            >
+              <Download size={14} />
+              <span>Download</span>
+            </button>
           </div>
         </div>
-      );
-    }
 
-    if (docxParagraphs && docxParagraphs.length > 0) {
-      return (
-        <div className="pdf-viewer-container">
-          {/* Top Toolbar for DOCX */}
-          <div className="pdf-toolbar">
-            <div className="pdf-toolbar-group">
-              <span className="docx-badge-pill">
-                <FileText size={14} />
-                <span>Word Document (.docx)</span>
-              </span>
-              <span className="docx-count-badge">
-                {docxParagraphs.length} {docxParagraphs.length === 1 ? 'paragraph' : 'paragraphs'}
-              </span>
+        {/* DOCX Formatted Reading Sheet / Viewport */}
+        <div className="docx-reader-viewport">
+          {docxLoading && (
+            <div className="pdf-loading-state">
+              <div className="pdf-spinner" />
+              <p className="pdf-state-desc">Loading Word document preview...</p>
             </div>
+          )}
 
-            <div className="pdf-toolbar-group">
+          {docxError && !docxLoading && (
+            <div className="docx-fallback-state">
+              <div style={{
+                width: '64px',
+                height: '64px',
+                borderRadius: 'var(--radius-lg)',
+                backgroundColor: 'var(--ai-indigo-subtle)',
+                color: 'var(--ai-indigo)',
+                display: 'flex',
+                alignItems: 'center',
+                justifyContent: 'center',
+              }}>
+                <FileText size={32} />
+              </div>
+              <h3 className="pdf-state-title">Word Document (.docx)</h3>
+              <p className="pdf-state-desc">{docxError}</p>
               <button
                 type="button"
-                className="pdf-btn-download"
+                className="btn-primary"
                 onClick={handleDownload}
-                aria-label="Download Document"
-                title="Download Word Document"
+                style={{ marginTop: '0.5rem' }}
               >
-                <Download size={14} />
-                <span>Download</span>
+                <Download size={15} />
+                <span>Download {docTitle}.docx</span>
               </button>
             </div>
-          </div>
+          )}
 
-          {/* DOCX Formatted Reading Sheet */}
-          <div className="docx-reader-viewport">
+          {/* Primary docx-preview DOM target container */}
+          <div
+            ref={docxContainerRef}
+            className="docx-render-target"
+            style={{ display: docxLoading || docxError || !docxRendered ? 'none' : 'flex' }}
+          />
+
+          {/* Fallback structured reading sheet if docx-preview was not rendered but paragraphs were extracted */}
+          {!docxLoading && !docxError && !docxRendered && docxParagraphs && docxParagraphs.length > 0 && (
             <article className="docx-reading-sheet animate-fade-in">
               <header className="docx-sheet-header">
                 <h2 className="docx-sheet-title">{docTitle}</h2>
@@ -407,44 +469,38 @@ export default function PdfViewer({ documentId, fileType = 'pdf', docTitle = 'Do
                 ))}
               </div>
             </article>
-          </div>
-        </div>
-      );
-    }
+          )}
 
-    // Safe fallback if extraction failed or format is non-extractable
-    return (
-      <div className="pdf-viewer-container">
-        <div className="docx-fallback-state">
-          <div style={{
-            width: '64px',
-            height: '64px',
-            borderRadius: 'var(--radius-lg)',
-            backgroundColor: 'var(--ai-indigo-subtle)',
-            color: 'var(--ai-indigo)',
-            display: 'flex',
-            alignItems: 'center',
-            justifyContent: 'center',
-          }}>
-            <FileText size={32} />
-          </div>
-          <h3 className="pdf-state-title">Word Document (.docx)</h3>
-          <p className="pdf-state-desc">
-            {docxError ? (
-              docxError
-            ) : (
-              'Inline canvas preview is tailored for PDF documents. Word document text content could not be extracted from this file. You can download this Word document to inspect it locally, or use the AI Assistant to ask questions grounded in its extracted text chunks.'
-            )}
-          </p>
-          <button
-            type="button"
-            className="btn-primary"
-            onClick={handleDownload}
-            style={{ marginTop: '0.5rem' }}
-          >
-            <Download size={15} />
-            <span>Download {docTitle}.docx</span>
-          </button>
+          {/* Safe fallback if extraction failed or format is non-extractable */}
+          {!docxLoading && !docxError && !docxRendered && (!docxParagraphs || docxParagraphs.length === 0) && (
+            <div className="docx-fallback-state">
+              <div style={{
+                width: '64px',
+                height: '64px',
+                borderRadius: 'var(--radius-lg)',
+                backgroundColor: 'var(--ai-indigo-subtle)',
+                color: 'var(--ai-indigo)',
+                display: 'flex',
+                alignItems: 'center',
+                justifyContent: 'center',
+              }}>
+                <FileText size={32} />
+              </div>
+              <h3 className="pdf-state-title">Word Document (.docx)</h3>
+              <p className="pdf-state-desc">
+                Inline canvas preview is tailored for PDF documents. Word document text content could not be extracted from this file. You can download this Word document to inspect it locally, or use the AI Assistant to ask questions grounded in its extracted text chunks.
+              </p>
+              <button
+                type="button"
+                className="btn-primary"
+                onClick={handleDownload}
+                style={{ marginTop: '0.5rem' }}
+              >
+                <Download size={15} />
+                <span>Download {docTitle}.docx</span>
+              </button>
+            </div>
+          )}
         </div>
       </div>
     );

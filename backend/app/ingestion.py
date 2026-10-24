@@ -17,8 +17,12 @@ except ImportError:
 
 try:
     from docx import Document as DocxDocument
+    from docx.text.paragraph import Paragraph as DocxParagraph
+    from docx.table import Table as DocxTable
 except ImportError:
     DocxDocument = None
+    DocxParagraph = None
+    DocxTable = None
 
 try:
     import google.generativeai as genai
@@ -49,6 +53,92 @@ def extract_text_and_metadata(file_path: str) -> List[dict[str, Any]]:
             f"Unsupported file format '{ext}'. Only PDF (.pdf) and DOCX (.docx) files are supported."
         )
 
+def extract_docx_document_text(file_path: str) -> str:
+    """
+    Extracts readable text from a DOCX file in document order.
+    Preserves headings (with markdown heading markers), paragraph boundaries,
+    and structured table contents.
+    Never includes raw Word XML tags (such as <w:left>, <w:rPr>, <w:color>, <w:t>) or formatting metadata.
+    """
+    if DocxDocument is None:
+        raise ImportError("python-docx is not installed. Please install it with `pip install python-docx`.")
+
+    try:
+        doc = DocxDocument(file_path)
+    except Exception as e:
+        raise ValueError(f"Failed to read DOCX file '{file_path}': {e}") from e
+
+    blocks: List[str] = []
+
+    # Iterate through body elements in document order
+    try:
+        body = doc.element.body
+        for child in body.iterchildren():
+            tag = child.tag.split("}")[-1] if "}" in child.tag else child.tag
+            if tag == "p":
+                para = DocxParagraph(child, doc) if DocxParagraph else None
+                text = para.text.strip() if para else ""
+                if text:
+                    style_name = (para.style.name if para.style else "").lower()
+                    if "heading 1" in style_name:
+                        blocks.append(f"# {text}")
+                    elif "heading 2" in style_name:
+                        blocks.append(f"## {text}")
+                    elif "heading 3" in style_name:
+                        blocks.append(f"### {text}")
+                    else:
+                        blocks.append(text)
+            elif tag == "tbl":
+                table = DocxTable(child, doc) if DocxTable else None
+                if table:
+                    table_rows: List[str] = []
+                    for row in table.rows:
+                        seen_cells = set()
+                        row_cells = []
+                        for cell in row.cells:
+                            if cell._tc not in seen_cells:
+                                seen_cells.add(cell._tc)
+                                row_cells.append(" ".join(cell.text.split()))
+                        if any(row_cells):
+                            table_rows.append(" | ".join(row_cells))
+                    if table_rows:
+                        blocks.append("\n".join(table_rows))
+    except Exception as iter_err:
+        logger.warning("Error during block iteration for '%s': %s; falling back to doc.paragraphs", file_path, iter_err)
+
+    # Fallback to doc.paragraphs and doc.tables if block iteration produced nothing
+    if not blocks:
+        for p in doc.paragraphs:
+            t = p.text.strip()
+            if t:
+                blocks.append(t)
+        for tbl in doc.tables:
+            tbl_rows = []
+            for row in tbl.rows:
+                seen_cells = set()
+                row_cells = []
+                for cell in row.cells:
+                    if cell._tc not in seen_cells:
+                        seen_cells.add(cell._tc)
+                        row_cells.append(" ".join(cell.text.split()))
+                if any(row_cells):
+                    tbl_rows.append(" | ".join(row_cells))
+            if tbl_rows:
+                blocks.append("\n".join(tbl_rows))
+
+    return "\n\n".join(blocks).strip()
+
+
+def extract_text_and_metadata(file_path: str) -> List[dict[str, Any]]:
+    if not os.path.isfile(file_path):
+        raise FileNotFoundError(f"File not found: {file_path}")
+
+    _, ext = os.path.splitext(file_path.lower())
+    if ext not in SUPPORTED_EXTENSIONS:
+        raise ValueError(
+            f"Unsupported file format '{ext}'. Only PDF (.pdf) and DOCX (.docx) files are supported."
+        )
+
     sections: List[dict[str, Any]] = []
 
     if ext == ".pdf":
@@ -64,16 +154,9 @@ def extract_text_and_metadata(file_path: str) -> List[dict[str, Any]]:
             raise ValueError(f"Failed to read PDF file '{file_path}': {e}") from e
 
     elif ext == ".docx":
-        if DocxDocument is None:
-            raise ImportError("python-docx is not installed. Please install it with `pip install python-docx`.")
-        try:
-            doc = DocxDocument(file_path)
-            paragraphs = [p.text for p in doc.paragraphs if p.text.strip()]
-            full_text = "\n".join(paragraphs)
-            if full_text.strip():
-                sections.append({"text": full_text, "page_number": None})
-        except Exception as e:
-            raise ValueError(f"Failed to read DOCX file '{file_path}': {e}") from e
+        full_text = extract_docx_document_text(file_path)
+        if full_text:
+            sections.append({"text": full_text, "page_number": None})
 
     if not sections or not any(s["text"].strip() for s in sections):
         raise ValueError(f"Document '{file_path}' is empty or unreadable.")

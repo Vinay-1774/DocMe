@@ -164,3 +164,58 @@ test('Button Consistency: DocumentPage.jsx uses consistent action buttons', () =
   assert.ok(docPageCode.includes('className="pdf-btn-download"'), 'Download button in header must use .pdf-btn-download');
   assert.ok(docPageCode.includes('api.downloadDocument'), 'Download button must call api.downloadDocument');
 });
+
+// Test 7: Verify docx-preview library integration in PdfViewer.jsx
+test('DOCX Preview: PdfViewer.jsx integrates maintained docx-preview renderAsync library', () => {
+  const viewerCode = fs.readFileSync(
+    path.join(rootDir, 'frontend', 'src', 'components', 'PdfViewer.jsx'),
+    'utf-8'
+  );
+
+  assert.ok(viewerCode.includes("from 'docx-preview'"), 'PdfViewer.jsx must import from docx-preview');
+  assert.ok(viewerCode.includes('renderAsync'), 'PdfViewer.jsx must call renderAsync');
+  assert.ok(viewerCode.includes('docxContainerRef'), 'PdfViewer.jsx must maintain docxContainerRef target');
+  assert.ok(viewerCode.includes('docx-render-target'), 'PdfViewer.jsx must render docx-render-target element');
+  assert.ok(viewerCode.includes('docxRendered'), 'PdfViewer.jsx must track docxRendered state');
+});
+
+// Test 8: Verify docx-preview styling and responsive layout
+test('DOCX Preview: PdfViewer.css defines responsive docx-render-target and page wrapper rules', () => {
+  const css = fs.readFileSync(
+    path.join(rootDir, 'frontend', 'src', 'components', 'PdfViewer.css'),
+    'utf-8'
+  );
+
+  assert.ok(css.includes('.docx-render-target'), 'PdfViewer.css must define .docx-render-target');
+  assert.ok(css.includes('.docx-wrapper'), 'PdfViewer.css must customize .docx-wrapper');
+  assert.ok(css.includes('section.docx'), 'PdfViewer.css must format section.docx pages');
+  assert.ok(css.includes('table'), 'PdfViewer.css must contain table layout rules');
+});
+
+// Test 9: Verify loading and error states for DOCX preview
+test('DOCX Preview: Loading and error states with authenticated download fallback', () => {
+  const viewerCode = fs.readFileSync(
+    path.join(rootDir, 'frontend', 'src', 'components', 'PdfViewer.jsx'),
+    'utf-8'
+  );
+
+  assert.ok(viewerCode.includes('pdf-loading-state'), 'PdfViewer.jsx must render loading state during fetch');
+  assert.ok(viewerCode.includes('Loading Word document preview...'), 'PdfViewer.jsx must provide user-friendly loading description');
+  assert.ok(viewerCode.includes('docx-fallback-state'), 'PdfViewer.jsx must provide clear error/fallback state');
+  assert.ok(viewerCode.includes('Download {docTitle}.docx') || viewerCode.includes('Download Word Document'), 'Fallback must provide direct download');
+  assert.ok(viewerCode.includes('getToken()'), 'DOCX preview must use authenticated token for download');
+});
+
+// Test 10: Verify PDF viewer regression
+test('PDF Regression: PDF.js canvas, pagination, and download preserved', () => {
+  const viewerCode = fs.readFileSync(
+    path.join(rootDir, 'frontend', 'src', 'components', 'PdfViewer.jsx'),
+    'utf-8'
+  );
+
+  assert.ok(viewerCode.includes('pdfjsLib.getDocument'), 'PDF.js getDocument preserved');
+  assert.ok(viewerCode.includes('canvasRef'), 'Canvas ref preserved for PDF rendering');
+  assert.ok(viewerCode.includes('handlePrevPage'), 'Pagination controls preserved');
+  assert.ok(viewerCode.includes('handleNextPage'), 'Pagination controls preserved');
+  assert.ok(viewerCode.includes('handleZoomIn'), 'Zoom controls preserved');
+});

@@ -270,3 +270,53 @@
   }
 }
 
+/* ==========================================================================
+   docx-preview Render Target Styles
+   Renders full DOCX document with typography, tables, headings, and margins
+   ========================================================================== */
+
+.docx-render-target {
+  width: 100%;
+  display: flex;
+  justify-content: center;
+  align-items: flex-start;
+  min-height: 500px;
+}
+
+.docx-render-target .docx-wrapper {
+  background: transparent !important;
+  padding: 0 !important;
+  display: flex;
+  flex-direction: column;
+  align-items: center;
+  width: 100% !important;
+}
+
+.docx-render-target .docx-wrapper > section.docx {
+  box-shadow: 0 8px 30px rgba(0, 0, 0, 0.5) !important;
+  margin-bottom: 2rem !important;
+  box-sizing: border-box !important;
+  max-width: 100% !important;
+  border-radius: 4px !important;
+}
+
+.docx-render-target table {
+  max-width: 100% !important;
+  overflow-x: auto !important;
+}
+
+.docx-render-target img {
+  max-width: 100% !important;
+  height: auto !important;
+}
+
+@media (max-width: 768px) {
+  .docx-render-target .docx-wrapper > section.docx {
+    width: 100% !important;
+    min-width: 0 !important;
+    padding: 1.5rem 1rem !important;
+    margin: 0 0 1.5rem 0 !important;
+  }
+}
+
+
