@@ -143,16 +143,9 @@ export default function PdfViewer({ documentId, fileType = 'pdf', docTitle = 'Do
         setLoading(true);
         setError(null);
 
-        const token = getToken();
-        const url = `${API_BASE_URL}/documents/${documentId}/download?inline=true`;
-
-        const response = await fetch(url, {
-          method: 'GET',
-          headers: {
-            Accept: 'application/pdf, application/octet-stream, */*',
-            ...(token ? { Authorization: `Bearer ${token}` } : {}),
-          },
-          credentials: 'include',
+        const response = await api.fetchDocumentFile(documentId, {
+          inline: true,
+          accept: 'application/pdf, application/octet-stream, */*',
           signal: abortController.signal,
         });
 
@@ -213,16 +206,10 @@ export default function PdfViewer({ documentId, fileType = 'pdf', docTitle = 'Do
         setDocxError(null);
         setDocxParagraphs(null);
 
-        const token = getToken();
-        const url = `${API_BASE_URL}/documents/${documentId}/download?inline=true`;
-
-        const response = await fetch(url, {
-          method: 'GET',
-          headers: {
-            Accept: 'application/vnd.openxmlformats-officedocument.wordprocessingml.document, application/octet-stream, */*',
-            ...(token ? { Authorization: `Bearer ${token}` } : {}),
-          },
-          credentials: 'include',
+        const token = getToken(); // Authenticated session token check
+        const response = await api.fetchDocumentFile(documentId, {
+          inline: true,
+          accept: 'application/vnd.openxmlformats-officedocument.wordprocessingml.document, application/octet-stream, */*',
           signal: abortController.signal,
         });
 
@@ -403,8 +390,13 @@ export default function PdfViewer({ documentId, fileType = 'pdf', docTitle = 'Do
           </div>
         </div>
 
-        {/* DOCX Formatted Reading Sheet / Viewport */}
-        <div className="docx-reader-viewport">
+        {/* DOCX Formatted Reading Sheet / Viewport - Primary Scroll Container */}
+        <div
+          className="docx-reader-viewport"
+          tabIndex={0}
+          role="region"
+          aria-label="Word document preview"
+        >
           {docxLoading && (
             <div className="pdf-loading-state">
               <div className="pdf-spinner" />
@@ -443,8 +435,7 @@ export default function PdfViewer({ documentId, fileType = 'pdf', docTitle = 'Do
           {/* Primary docx-preview DOM target container */}
           <div
             ref={docxContainerRef}
-            className="docx-render-target"
-            style={{ display: docxLoading || docxError || !docxRendered ? 'none' : 'flex' }}
+            className={`docx-render-target ${docxLoading || docxError || !docxRendered ? 'is-rendering-hidden' : ''}`}
           />
 
           {/* Fallback structured reading sheet if docx-preview was not rendered but paragraphs were extracted */}

@@ -472,7 +472,7 @@ function ExplorePageContent() {
                   <Award size={18} style={{ color: 'var(--accent-amber)' }} />
                   <span>Top Contributors</span>
                 </h2>
-                <span className="topics-hint-badge">By shared documents</span>
+                <span className="topics-hint-badge">Total research uploads</span>
               </div>
 
               {loadingContributors ? (

@@ -79,8 +79,15 @@ export default function ProfilePage() {
         userData = await api.getUserProfile(targetUserId);
       }
 
-      // Fetch documents by this contributor
-      const docs = await api.getContributorDocuments(targetUserId);
+      // Fetch documents for profile:
+      // If viewing own profile ("My Documents"), use dedicated api.getDocuments('mine')
+      // Otherwise fetch public documents for the contributor
+      let docs = [];
+      if (isOwnProfile) {
+        docs = await api.getDocuments('mine');
+      } else {
+        docs = await api.getContributorDocuments(targetUserId);
+      }
 
       setProfile(userData);
       setDocuments(Array.isArray(docs) ? docs : []);
@@ -263,18 +270,27 @@ export default function ProfilePage() {
                 <div className="profile-stats-grid">
                   <div className="stat-box">
                     <span className="stat-number">{documents.length}</span>
-                    <span className="stat-label">Total Documents</span>
+                    <span className="stat-label">
+                      {isOwnProfile ? 'Total Documents' : 'Shared Publications'}
+                    </span>
                   </div>
 
-                  <div className="stat-box">
-                    <span className="stat-number">{publicCount}</span>
-                    <span className="stat-label">Public Preprints</span>
-                  </div>
+                  {isOwnProfile ? (
+                    <>
+                      <div className="stat-box">
+                        <span className="stat-number">{publicCount}</span>
+                        <span className="stat-label">Public Preprints</span>
+                      </div>
 
-                  {isOwnProfile && (
+                      <div className="stat-box">
+                        <span className="stat-number">{privateCount}</span>
+                        <span className="stat-label">Private Papers</span>
+                      </div>
+                    </>
+                  ) : (
                     <div className="stat-box">
-                      <span className="stat-number">{privateCount}</span>
-                      <span className="stat-label">Private Papers</span>
+                      <span className="stat-number">{publicCount}</span>
+                      <span className="stat-label">Public Preprints</span>
                     </div>
                   )}
                 </div>

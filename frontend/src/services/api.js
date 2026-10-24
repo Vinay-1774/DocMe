@@ -204,18 +204,25 @@ export async function apiRequest(endpoint, options = {}) {
     body = null,
     headers = {},
     authRequired = true,
+    anonymous = false,
     _isRetry = false,
     ...rest
   } = options;
 
-  let token = getToken();
+  let token = anonymous ? null : getToken();
 
-  if (authRequired && token && !_isRetry && isTokenExpired(token, 10)) {
+  // If token is present and not explicitly anonymous, proactively refresh if near expiry
+  if (token && !_isRetry && isTokenExpired(token, 10)) {
     try {
       token = await requestTokenRefresh();
     } catch (refreshErr) {
       if (refreshErr.status === 401 || refreshErr.status === 403) {
-        throw refreshErr;
+        if (authRequired) {
+          throw refreshErr;
+        } else {
+          clearAuth();
+          token = null;
+        }
       }
     }
   }
@@ -228,7 +235,8 @@ export async function apiRequest(endpoint, options = {}) {
     reqBody = JSON.stringify(body);
   }
 
-  if (authRequired && token) {
+  // Attach token if present and not explicitly anonymous
+  if (!anonymous && token) {
     reqHeaders['Authorization'] = `Bearer ${token}`;
   }
 
@@ -248,7 +256,8 @@ export async function apiRequest(endpoint, options = {}) {
   }
 
   // Handle 401 with single automatic refresh retry
-  if (response.status === 401 && authRequired && !_isRetry) {
+  // Retries when a token was sent or auth was required
+  if (response.status === 401 && !_isRetry && !anonymous && (token || authRequired)) {
     try {
       const newToken = await requestTokenRefresh();
       if (newToken) {
@@ -260,9 +269,12 @@ export async function apiRequest(endpoint, options = {}) {
     } catch (refreshErr) {
       if (refreshErr.status === 401 || refreshErr.status === 403) {
         clearAuth();
-        throw new ApiError('Your session has expired. Please log in again.', 401);
+        if (authRequired) {
+          throw new ApiError('Your session has expired. Please log in again.', 401);
+        }
+      } else {
+        throw refreshErr;
       }
-      throw refreshErr;
     }
   }
 
@@ -296,6 +308,7 @@ export const api = {
       method: 'POST',
       body: { email, password },
       authRequired: false,
+      anonymous: true,
     });
   },
 
@@ -304,6 +317,7 @@ export const api = {
       method: 'POST',
       body: { username, email, password },
       authRequired: false,
+      anonymous: true,
     });
   },
 
@@ -438,16 +452,63 @@ export const api = {
     return `${API_BASE_URL}/documents/${documentId}/download`;
   },
 
+  async fetchDocumentFile(documentId, { inline = false, accept = '*/*', signal = null } = {}, _isRetry = false) {
+    let token = getToken();
+
+    if (token && !_isRetry && isTokenExpired(token, 10)) {
+      try {
+        token = await requestTokenRefresh();
+      } catch (refreshErr) {
+        if (refreshErr.status === 401 || refreshErr.status === 403) {
+          clearAuth();
+          token = null;
+        }
+      }
+    }
+
+    const inlineParam = inline ? '?inline=true' : '';
+    const url = `${API_BASE_URL}/documents/${documentId}/download${inlineParam}`;
+    const headers = {
+      Accept: accept,
+      ...(token ? { Authorization: `Bearer ${token}` } : {}),
+    };
+
+    let response;
+    try {
+      response = await fetch(url, {
+        method: 'GET',
+        headers,
+        credentials: 'include',
+        signal,
+      });
+    } catch (netErr) {
+      if (netErr.name === 'AbortError') {
+        throw netErr;
+      }
+      throw new ApiError(`Network error: Unable to connect to server. ${netErr.message}`, 0);
+    }
+
+    // Proactively handle 401 by attempting token refresh and retrying once
+    if (response.status === 401 && !_isRetry && token) {
+      try {
+        const newToken = await requestTokenRefresh();
+        if (newToken) {
+          return this.fetchDocumentFile(documentId, { inline, accept, signal }, true);
+        }
+      } catch (refreshErr) {
+        if (refreshErr.status === 401 || refreshErr.status === 403) {
+          clearAuth();
+        }
+      }
+    }
+
+    return response;
+  },
+
   async downloadDocument(documentId) {
-    const token = getToken();
-    const url = `${API_BASE_URL}/documents/${documentId}/download`;
-    const response = await fetch(url, {
-      method: 'GET',
-      headers: {
-        Accept: 'application/octet-stream, application/pdf, application/vnd.openxmlformats-officedocument.wordprocessingml.document, */*',
-        ...(token ? { Authorization: `Bearer ${token}` } : {}),
-      },
-      credentials: 'include',
+    const response = await this.fetchDocumentFile(documentId, {
+      inline: false,
+      accept: 'application/octet-stream, application/pdf, application/vnd.openxmlformats-officedocument.wordprocessingml.document, */*',
     });
 
     if (!response.ok) {

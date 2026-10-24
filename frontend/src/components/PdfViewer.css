@@ -93,7 +93,6 @@
 .pdf-viewport {
   flex: 1 1 0%;
   min-height: 0;
-  height: 100%;
   overflow-y: auto;
   overflow-x: auto;
   -webkit-overflow-scrolling: touch;
@@ -209,18 +208,22 @@
 .docx-reader-viewport {
   flex: 1 1 0%;
   min-height: 0;
-  height: 100%;
   overflow-y: auto;
   overflow-x: hidden;
   -webkit-overflow-scrolling: touch;
   overscroll-behavior-y: contain;
   padding: 2rem 1.5rem;
   display: flex;
-  justify-content: center;
-  align-items: flex-start;
+  flex-direction: column;
+  align-items: center;
   background-color: var(--bg-app);
   scrollbar-width: thin;
   scrollbar-color: var(--border-medium) var(--bg-surface-secondary);
+}
+
+.docx-reader-viewport:focus-visible {
+  outline: 2px solid var(--primary-brand);
+  outline-offset: -2px;
 }
 
 .docx-reading-sheet {
@@ -304,19 +307,30 @@
 
 .docx-render-target {
   width: 100%;
+  max-width: 900px;
+  margin: 0 auto;
   display: flex;
-  justify-content: center;
-  align-items: flex-start;
+  flex-direction: column;
+  align-items: center;
   min-height: min-content;
+}
+
+.docx-render-target.is-rendering-hidden {
+  position: absolute;
+  visibility: hidden;
+  pointer-events: none;
+  opacity: 0;
+  height: 0;
+  overflow: hidden;
 }
 
 .docx-render-target .docx-wrapper,
 .docx-render-target .docx-preview-document-wrapper {
   background: transparent !important;
   padding: 0 !important;
-  display: flex;
-  flex-direction: column;
-  align-items: center;
+  display: flex !important;
+  flex-direction: column !important;
+  align-items: center !important;
   width: 100% !important;
   max-width: 100% !important;
   box-sizing: border-box !important;
@@ -330,13 +344,17 @@
   box-sizing: border-box !important;
   max-width: 100% !important;
   border-radius: 4px !important;
-  overflow-x: auto !important;
+  overflow: visible !important;
+  overflow-x: visible !important;
+  overflow-y: visible !important;
 }
 
 .docx-render-target table {
   max-width: 100% !important;
   box-sizing: border-box !important;
   word-break: break-word;
+  display: block;
+  overflow-x: auto;
 }
 
 .docx-render-target img {
@@ -344,7 +362,7 @@
   height: auto !important;
 }
 
-@media (max-width: 768px) {
+@media (max-width: 860px) {
   .docx-reader-viewport {
     padding: 1rem 0.5rem;
   }
@@ -358,8 +376,38 @@
   .docx-render-target .docx-preview-document-wrapper > section.docx-preview-document {
     width: 100% !important;
     min-width: 0 !important;
+    max-width: 100% !important;
     padding: 1.25rem 0.875rem !important;
     margin: 0 0 1rem 0 !important;
+    border-radius: var(--radius-md) !important;
+  }
+}
+
+@media (max-width: 480px) {
+  .docx-reader-viewport {
+    padding: 0.75rem 0.25rem;
+  }
+  .docx-reading-sheet {
+    padding: 1.25rem 0.75rem;
+    border-radius: var(--radius-lg);
+  }
+  .docx-render-target .docx-wrapper > section.docx,
+  .docx-render-target .docx-preview-document-wrapper > section.docx-preview-document {
+    padding: 1rem 0.5rem !important;
+    margin: 0 0 0.75rem 0 !important;
+  }
+}
+
+@media (max-width: 340px) {
+  .docx-reader-viewport {
+    padding: 0.5rem 0.15rem;
+  }
+  .docx-reading-sheet {
+    padding: 1rem 0.5rem;
+  }
+  .docx-render-target .docx-wrapper > section.docx,
+  .docx-render-target .docx-preview-document-wrapper > section.docx-preview-document {
+    padding: 0.75rem 0.35rem !important;
   }
 }
 

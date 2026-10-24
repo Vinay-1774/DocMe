@@ -244,7 +244,9 @@
 
   .workspace-grid.show-reader .workspace-reader-col {
     display: flex;
+    flex-direction: column;
     height: calc(100vh - 130px);
+    min-height: 0;
   }
 
   .workspace-grid.show-chat .workspace-reader-col,
@@ -255,7 +257,9 @@
   .workspace-grid.show-chat .workspace-chat-col,
   .workspace-grid.show-discussion .workspace-chat-col {
     display: flex;
+    flex-direction: column;
     height: calc(100vh - 130px);
+    min-height: 0;
   }
 }
 

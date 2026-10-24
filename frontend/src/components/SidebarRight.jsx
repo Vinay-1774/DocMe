@@ -139,7 +139,7 @@ export default function SidebarRight() {
                 </div>
                 <span className="ranking-username">{user.username}</span>
               </div>
-              <span className="ranking-doc-count">
+              <span className="ranking-doc-count" title={`${user.document_count} total uploaded documents`}>
                 {user.document_count} {user.document_count === 1 ? 'doc' : 'docs'}
               </span>
             </Link>

@@ -33,7 +33,7 @@ function DocumentPageContent() {
 
   const [doc, setDoc] = useState(null);
   const [loading, setLoading] = useState(true);
-  const [error, setError] = useState(null);
+  const [errorState, setErrorState] = useState(null);
 
   // Active tabs
   const initialTab = searchParams.get('tab') === 'discussion' ? 'discussion' : 'chat';
@@ -42,38 +42,47 @@ function DocumentPageContent() {
   const [mobileTab, setMobileTab] = useState(initialMobileTab); // 'reader' | 'chat' | 'discussion'
   const [commentCount, setCommentCount] = useState(null);
 
-  useEffect(() => {
-    let isMounted = true;
-
-    async function fetchDoc() {
-      try {
-        setLoading(true);
-        setError(null);
-        const data = await api.getDocument(id);
-        if (isMounted) setDoc(data);
-      } catch (err) {
-        if (isMounted) {
-          if (err.status === 401) {
-            setError('Please log in to view this private document.');
-          } else if (err.status === 403) {
-            setError("You don't have permission to view this private document.");
-          } else if (err.status === 404) {
-            setError('This document could not be found.');
-          } else {
-            setError(err.message || "Couldn't load document details. Please try again.");
-          }
-        }
-      } finally {
-        if (isMounted) setLoading(false);
+  const fetchDoc = React.useCallback(async () => {
+    try {
+      setLoading(true);
+      setErrorState(null);
+      const data = await api.getDocument(id);
+      setDoc(data);
+    } catch (err) {
+      const status = err.status || 0;
+      if (status === 401) {
+        setErrorState({
+          status: 401,
+          title: 'Sign In Required',
+          message: 'Please log in to view this private document.',
+        });
+      } else if (status === 403) {
+        setErrorState({
+          status: 403,
+          title: 'Access Restricted',
+          message: "You don't have permission to view this private document.",
+        });
+      } else if (status === 404) {
+        setErrorState({
+          status: 404,
+          title: 'Document Not Found',
+          message: 'This document could not be found or has been removed.',
+        });
+      } else {
+        setErrorState({
+          status,
+          title: 'Unable to Load Document',
+          message: err.message || "Couldn't load document details. Please check your connection and try again.",
+        });
       }
+    } finally {
+      setLoading(false);
     }
-
-    fetchDoc();
-
-    return () => {
-      isMounted = false;
-    };
   }, [id]);
+
+  useEffect(() => {
+    fetchDoc();
+  }, [fetchDoc]);
 
   // Synchronize when URL tab parameter changes
   useEffect(() => {
@@ -204,16 +213,26 @@ function DocumentPageContent() {
         <div style={{ display: 'flex', alignItems: 'center', justifyContent: 'center', flex: 1, padding: '3rem' }}>
           <div className="pdf-spinner" />
         </div>
-      ) : error ? (
+      ) : errorState ? (
         <div style={{ display: 'flex', flexDirection: 'column', alignItems: 'center', justifyContent: 'center', flex: 1, padding: '2rem' }}>
           <div className="feed-error-state" style={{ maxWidth: '480px' }}>
             <AlertCircle size={32} color="var(--danger-red)" />
-            <h2 className="empty-state-title">Access Restricted</h2>
-            <p className="empty-state-desc">{error}</p>
-            {!isAuthenticated && (
-              <Link to="/login" className="btn-primary" style={{ marginTop: '0.5rem' }}>
+            <h2 className="empty-state-title">{errorState.title}</h2>
+            <p className="empty-state-desc">{errorState.message}</p>
+            {errorState.status === 401 && !isAuthenticated && (
+              <Link to={`/login?from=${encodeURIComponent(`/document/${id}`)}`} className="btn-primary" style={{ marginTop: '0.5rem' }}>
                 Sign In to Access
               </Link>
+            )}
+            {(errorState.status === 0 || errorState.status >= 500) && (
+              <button
+                type="button"
+                onClick={fetchDoc}
+                className="btn-primary"
+                style={{ marginTop: '0.5rem' }}
+              >
+                Try Again
+              </button>
             )}
             <Link to="/" className="btn-secondary" style={{ marginTop: '0.25rem' }}>
               Return to Feed
