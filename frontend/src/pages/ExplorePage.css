@@ -477,3 +477,35 @@
   }
 }
 
+@media (max-width: 480px) {
+  .explore-hero-card {
+    padding: 1.25rem 0.875rem;
+  }
+  .explore-hero-title {
+    font-size: 1.375rem;
+  }
+  .explore-submit-btn span {
+    display: none;
+  }
+  .explore-submit-btn {
+    padding: 0.45rem 0.6rem;
+  }
+  .explore-search-input {
+    padding-right: 3.25rem;
+    padding-left: 2.25rem;
+    font-size: 0.8125rem;
+  }
+  .explore-search-icon {
+    left: 0.75rem;
+  }
+}
+
+@media (max-width: 360px) {
+  .explore-hero-card {
+    padding: 1rem 0.75rem;
+  }
+  .explore-hero-title {
+    font-size: 1.25rem;
+  }
+}
+

@@ -236,3 +236,34 @@
   max-width: 400px;
   line-height: 1.45;
 }
+
+/* Responsive */
+@media (max-width: 640px) {
+  .feed-title {
+    font-size: 1.25rem;
+  }
+  .feed-composer-box {
+    padding: 0.625rem 0.75rem;
+    gap: 0.5rem;
+  }
+  .composer-placeholder-input {
+    font-size: 0.8125rem;
+    white-space: nowrap;
+    overflow: hidden;
+    text-overflow: ellipsis;
+  }
+  .feed-controls-bar {
+    flex-wrap: wrap;
+    gap: 0.5rem;
+  }
+}
+
+@media (max-width: 360px) {
+  .feed-title {
+    font-size: 1.125rem;
+  }
+  .btn-composer-cta {
+    padding: 0.4rem 0.6rem;
+    font-size: 0.75rem;
+  }
+}

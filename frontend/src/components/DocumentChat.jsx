@@ -29,11 +29,22 @@ export default function DocumentChat({ documentId, docTitle = 'this document' })
 
   const scrollRef = useRef(null);
   const textareaRef = useRef(null);
+  const isNearBottomRef = useRef(true);
 
-  // Auto-scroll on new tokens or messages
+  // Monitor user scrolling to detect if user has scrolled up or is near bottom
+  const handleScroll = () => {
+    const el = scrollRef.current;
+    if (!el) return;
+    const threshold = 60; // px threshold from bottom
+    const distanceFromBottom = el.scrollHeight - el.scrollTop - el.clientHeight;
+    isNearBottomRef.current = distanceFromBottom <= threshold;
+  };
+
+  // Auto-scroll on new tokens or messages ONLY if user was already at or near bottom
   useEffect(() => {
-    if (scrollRef.current) {
-      scrollRef.current.scrollTop = scrollRef.current.scrollHeight;
+    const el = scrollRef.current;
+    if (el && isNearBottomRef.current) {
+      el.scrollTop = el.scrollHeight;
     }
   }, [messages, generating]);
 
@@ -62,6 +73,12 @@ export default function DocumentChat({ documentId, docTitle = 'this document' })
     if (!isAuthenticated) {
       setError('Please log in to chat with documents and access AI analysis.');
       return;
+    }
+
+    // When sending, always snap to bottom so user sees their new message
+    isNearBottomRef.current = true;
+    if (scrollRef.current) {
+      scrollRef.current.scrollTop = scrollRef.current.scrollHeight;
     }
 
     // Reset input (height will reset automatically via useEffect)
@@ -160,7 +177,7 @@ export default function DocumentChat({ documentId, docTitle = 'this document' })
       </div>
 
       {/* Messages Scroll Area */}
-      <div className="chat-messages-scroll" ref={scrollRef}>
+      <div className="chat-messages-scroll" ref={scrollRef} onScroll={handleScroll}>
         {messages.length === 0 ? (
           <div className="chat-empty-hero">
             <div className="chat-hero-icon">
