@@ -27,11 +27,6 @@ const envJsPath = path.join(frontendDir, 'shared', 'env.js');
 
 const htmlFiles = [
   path.join(frontendDir, 'index.html'),
-  path.join(frontendDir, 'pages', 'login.html'),
-  path.join(frontendDir, 'pages', 'register.html'),
-  path.join(frontendDir, 'pages', 'feed.html'),
-  path.join(frontendDir, 'pages', 'profile.html'),
-  path.join(frontendDir, 'pages', 'document-chat.html'),
 ];
 
 const isClean = process.argv.includes('--clean') || process.argv.includes('--reset');
