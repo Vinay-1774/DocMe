@@ -56,12 +56,10 @@ export function AuthProvider({ children }) {
     }
   }, [updateUser]);
 
-  // Register
+  // Register (creates account only; authentication happens via /login)
   const register = useCallback(async (username, email, password) => {
-    const res = await api.register(username, email, password);
-    // Auto-login upon successful registration
-    return await login(email, password);
-  }, [login]);
+    return await api.register(username, email, password);
+  }, []);
 
   // Initial session restoration on mount
   useEffect(() => {

@@ -82,7 +82,15 @@ export default function RegisterPage() {
       setFieldErrors({});
 
       await register(username.trim(), email.trim(), password);
-      navigate(from, { replace: true });
+      const loginTarget = from !== '/' ? `/login?from=${encodeURIComponent(from)}` : '/login';
+      navigate(loginTarget, {
+        replace: true,
+        state: {
+          registered: true,
+          email: email.trim(),
+          ...(from !== '/' ? { from } : {}),
+        },
+      });
     } catch (err) {
       setError(err.message || 'Could not create account. The username or email may already be in use.');
     } finally {

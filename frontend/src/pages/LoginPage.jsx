@@ -1,19 +1,20 @@
 import React, { useState } from 'react';
 import { Link, useNavigate, useLocation, Navigate } from 'react-router-dom';
-import { FileText, ArrowRight, AlertCircle, Eye, EyeOff, Loader2 } from 'lucide-react';
+import { FileText, ArrowRight, AlertCircle, CheckCircle2, Eye, EyeOff, Loader2 } from 'lucide-react';
 import { useAuth } from '../hooks/useAuth.js';
 import './Auth.css';
 
 export default function LoginPage() {
-  const [email, setEmail] = useState('');
+  const { login, isAuthenticated, isLoading } = useAuth();
+  const navigate = useNavigate();
+  const location = useLocation();
+
+  const [email, setEmail] = useState(() => location.state?.email || '');
   const [password, setPassword] = useState('');
   const [showPassword, setShowPassword] = useState(false);
   const [loading, setLoading] = useState(false);
   const [error, setError] = useState(null);
-
-  const { login, isAuthenticated, isLoading } = useAuth();
-  const navigate = useNavigate();
-  const location = useLocation();
+  const registeredSuccess = Boolean(location.state?.registered);
 
   // Extract safe return destination (preserving query parameters and avoiding redirect loops)
   const statePath = location.state?.from
@@ -78,8 +79,16 @@ export default function LoginPage() {
           </p>
         </div>
 
+        {/* Registration success notice */}
+        {registeredSuccess && !error && (
+          <div className="auth-alert-success" role="status">
+            <CheckCircle2 size={16} style={{ flexShrink: 0, marginTop: '2px' }} />
+            <span>Account created successfully. Please sign in to continue.</span>
+          </div>
+        )}
+
         {/* Notice if redirected from a protected page */}
-        {from !== '/' && !error && (
+        {!registeredSuccess && from !== '/' && !error && (
           <div className="auth-alert-info">
             <span>Please log in to continue.</span>
           </div>

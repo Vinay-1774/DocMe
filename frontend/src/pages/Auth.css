@@ -204,6 +204,19 @@
   gap: 0.5rem;
 }
 
+.auth-alert-success {
+  padding: 0.75rem 1rem;
+  border-radius: var(--radius-md);
+  background-color: var(--success-green-subtle);
+  border: 1px solid var(--success-green-border);
+  color: var(--success-green);
+  font-size: 0.8125rem;
+  line-height: 1.4;
+  display: flex;
+  align-items: flex-start;
+  gap: 0.5rem;
+}
+
 .auth-alert-info {
   padding: 0.75rem 1rem;
   border-radius: var(--radius-md);
